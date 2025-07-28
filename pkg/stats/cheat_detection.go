@@ -43,19 +43,25 @@ func (cd *CheatDetector) CollectFinalStats(demoStats *DemoStats) {
 	}
 }
 
+// Helper function to clamp a value between 0 and 1
+func clamp01(value float64) float64 {
+	if value < 0.0 {
+		return 0.0
+	}
+	if value > 1.0 {
+		return 1.0
+	}
+	return value
+}
+
 // calculateCheatLikelihood determines the likelihood a player is cheating based on statistical analysis
 func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) float64 {
-	// Initialize factors and their weights
-	type Factor struct {
-		value  float64 // 0-100 score for this factor
-		weight float64 // Weight of this factor in the overall calculation
-	}
-
-	factors := make(map[string]Factor)
-
-	// === Headshot Analysis ===
+	// === Extract metrics ===
 	hsPercentage := 0.0
 	totalKills := int64(0)
+	p95SnapVelocity := 0.0
+	medianSnapVelocity := 0.0
+	snapCount := int64(0)
 
 	if metric, found := playerStats.GetMetric(Category("kills"), Key("headshot_percentage")); found {
 		hsPercentage = metric.FloatValue
@@ -64,51 +70,6 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 	if metric, found := playerStats.GetMetric(Category("kills"), Key("total_kills")); found {
 		totalKills = metric.IntValue
 	}
-
-	// Weight headshot percentage by total kills (more kills = more reliable data)
-	// 0-100 scale where 100 means extremely suspicious (e.g., 100% HS with many kills)
-	hsFactorValue := 0.0
-	if totalKills > 0 {
-		// Base factor on headshot percentage
-		hsFactorValue = hsPercentage
-
-		// Apply multiplier based on kills (more kills with high HS% is more suspicious)
-		if totalKills >= 10 {
-			// For high kill counts, we increase the suspicion factor for high HS rates
-			if hsPercentage > 70 {
-				killsMultiplier := math.Min(1.5, 1.0+float64(totalKills)/100.0)
-				hsFactorValue = math.Min(100.0, hsPercentage*killsMultiplier)
-			}
-		} else {
-			// For low kill counts, we reduce the weight as it could just be luck
-			hsFactorValue = hsPercentage * float64(totalKills) / 10.0
-		}
-	}
-	factors["headshot"] = Factor{value: hsFactorValue, weight: 0.4} // Reduced weight to accommodate snap velocity
-
-	// === Weapon Usage Analysis ===
-	knifePercentage := 0.0
-
-	if metric, found := playerStats.GetMetric(Category("weapons"), Key("knife_percentage")); found {
-		knifePercentage = metric.FloatValue
-	}
-
-	// Cheaters often have unusually low knife-out time (too confident moving around)
-	// or sometimes unusually high (for trolling)
-	knifeFactorValue := 0.0
-	if knifePercentage < 10 {
-		// Very low knife usage might indicate cheating (too confident moving without knife)
-		knifeFactorValue = (10 - knifePercentage) * 5 // Up to 50 points for extremely low knife usage
-	} else if knifePercentage > 40 {
-		// Very high knife usage might also be suspicious (trolling with cheats)
-		knifeFactorValue = (knifePercentage - 40) * 2 // Up to 60 points for extremely high knife usage
-	}
-	factors["knife_usage"] = Factor{value: knifeFactorValue, weight: 0.1} // Reduced weight
-
-	// === Snap Velocity Analysis ===
-	p95SnapVelocity := 0.0
-	medianSnapVelocity := 0.0
-	snapCount := int64(0)
 
 	if metric, found := playerStats.GetMetric(Category("aiming"), Key("p95_snap_velocity")); found {
 		p95SnapVelocity = metric.FloatValue
@@ -122,68 +83,61 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		snapCount = metric.IntValue
 	}
 
-	// Calculate snap velocity factor based on the 95th percentile value
-	// According to the research provided, values are interpreted as:
-	// < 1 °/ms = normal human
-	// 1-3 °/ms = very fast but possible for pro players
-	// > 3 °/ms = biomechanically implausible, strong aimbot evidence
-	snapFactorValue := 0.0
+	// === Calculate cheat score using rule-based model ===
+	score := 0.0
 
-	if snapCount >= 5 { // Need at least a few snaps to make a meaningful assessment
-		// Base calculation - scale based on how much the snap velocity exceeds human norms
-		// In this demo, the values are much lower than expected, so we adjust the scale
-		// The maximum p95 velocity observed is around 0.04 deg/ms, which is well below the human threshold
+	// Headshot factor - only apply if player has at least 30 kills
+	// HS above 55% adds up to 1.0 to the score
+	hsScore := 0.0
+	if totalKills >= 30 {
+		hsScore = clamp01((hsPercentage - 55.0) / 20.0)
+		score += 1.0 * hsScore
+	}
 
-		// For this demo, we'll use a different scale since the recorded velocities are much lower
-		// Likely due to the demo format or tick rate limitations
-		if p95SnapVelocity < 0.05 {
-			// Normal human range in our observed data
-			snapFactorValue = p95SnapVelocity * 500 // Scale to 0-25 points for observed range
-		} else if p95SnapVelocity <= 0.1 {
-			// Suspicious in our data
-			snapFactorValue = 25 + (p95SnapVelocity-0.05)*1000 // 25-75 points
-		} else {
-			// Very suspicious in our data
-			snapFactorValue = 75 + (p95SnapVelocity-0.1)*500 // 75-100 points
-			// Cap at 100
-			snapFactorValue = math.Min(snapFactorValue, 100.0)
-		}
+	// Snap velocity factor
+	// P95 snap above 3°/ms adds up to 1.0 to the score
+	snapScore := 0.0
+	if snapCount >= 5 {
+		snapScore = clamp01((p95SnapVelocity - 3.0) / 3.0)
+		score += 1.0 * snapScore
 
 		// Also consider consistency - if median is close to p95, it's more suspicious
-		// as it indicates consistent inhuman precision rather than occasional luck
 		consistencyFactor := medianSnapVelocity / math.Max(0.001, p95SnapVelocity)
-
-		// Consistency factor ranges from 0-1, where 1 means all snaps are at the max speed
-		// Adjust snap factor based on consistency
-		snapFactorValue *= (0.7 + 0.3*consistencyFactor)
-
-		// Apply a multiplier based on the number of snaps observed
-		// More samples = more confidence in the data
-		if snapCount < 30 {
-			snapFactorValue *= math.Max(0.5, float64(snapCount)/30.0)
-		}
-
-		// High kill count with high snap velocity is more suspicious
-		if totalKills >= 30 && snapFactorValue > 50 {
-			snapFactorValue *= 1.2
+		if consistencyFactor > 0.7 && snapScore > 0.5 {
+			score += 0.2 * consistencyFactor // Add up to 0.2 for high consistency
 		}
 	}
 
-	// Add snap velocity as a major factor in cheat detection
-	factors["snap_velocity"] = Factor{value: snapFactorValue, weight: 0.5}
-
-	// === Calculate weighted average ===
-	totalWeight := 0.0
-	weightedSum := 0.0
-
-	for _, factor := range factors {
-		weightedSum += factor.value * factor.weight
-		totalWeight += factor.weight
+	// Flag player as potential cheater if total score exceeds threshold
+	// According to the guidelines, a score >= 1.2 is considered suspicious
+	// This means the player is red on both metrics or extreme on one
+	cheatLikelihood := 0.0
+	if score >= 1.2 {
+		// Scale to percentage - at 1.2 we're at 60%, anything above 2.0 is 100%
+		cheatLikelihood = math.Min(100.0, (score/2.0)*100.0)
+	} else {
+		// Below the cheating threshold, scale proportionally
+		cheatLikelihood = (score / 1.2) * 60.0
 	}
 
-	if totalWeight > 0 {
-		return weightedSum / totalWeight
-	}
+	// === Add explanatory metrics for transparency ===
+	playerStats.AddMetric(Category("anti_cheat"), Key("hs_score"), Metric{
+		Type:        MetricFloat,
+		FloatValue:  hsScore,
+		Description: "Headshot-based cheat score component (0-1)",
+	})
 
-	return 0.0
+	playerStats.AddMetric(Category("anti_cheat"), Key("snap_score"), Metric{
+		Type:        MetricFloat,
+		FloatValue:  snapScore,
+		Description: "Snap velocity-based cheat score component (0-1)",
+	})
+
+	playerStats.AddMetric(Category("anti_cheat"), Key("total_cheat_score"), Metric{
+		Type:        MetricFloat,
+		FloatValue:  score,
+		Description: "Total cheat score before conversion to percentage",
+	})
+
+	return cheatLikelihood
 }

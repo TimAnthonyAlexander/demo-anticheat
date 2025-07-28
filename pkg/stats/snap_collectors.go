@@ -15,6 +15,9 @@ const (
 
 	// MinAngleDiffThreshold is the minimum angle difference in degrees that indicates a stopped movement
 	MinAngleDiffThreshold = 0.2
+
+	// Conversion factor from radians to degrees
+	RadToDeg = 57.2958
 )
 
 // ViewAngleSnapshot stores a player's view angle at a specific tick
@@ -173,15 +176,18 @@ func (sac *SnapAngleCollector) processKill(e events.Kill, demoStats *DemoStats) 
 	// Calculate 3D angle difference between start and end vectors
 	yawDiff := float64(angleDiff(startSnapshot.Yaw, endSnapshot.Yaw))
 	pitchDiff := float64(angleDiff(startSnapshot.Pitch, endSnapshot.Pitch))
-	angleDelta := math.Sqrt(yawDiff*yawDiff + pitchDiff*pitchDiff)
 
-	// Convert tick delta to milliseconds with safeguards
+	// Convert the angle difference from radians to degrees
+	angleDeltaRad := math.Sqrt(yawDiff*yawDiff + pitchDiff*pitchDiff)
+	angleDeltaDeg := angleDeltaRad * RadToDeg
+
+	// Convert tick delta to milliseconds
 	timeDeltaMs := (tickDelta / math.Max(1.0, sac.tickRate)) * 1000.0
 
 	// Calculate velocity in degrees per millisecond
 	var velocity float64
 	if timeDeltaMs > 0 {
-		velocity = angleDelta / timeDeltaMs
+		velocity = angleDeltaDeg / timeDeltaMs
 	} else {
 		velocity = 0
 	}
