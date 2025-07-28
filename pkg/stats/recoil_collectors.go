@@ -14,6 +14,142 @@ const (
 	RecoilRadToDeg = 57.295779513
 )
 
+// Spray patterns for different weapons (yaw, pitch) in degrees
+// First bullet is always (0,0) as the reference point
+var SprayPattern = map[common.EquipmentType][][2]float64{
+	common.EqAK47: {
+		{0.0, 0.0},   // 1
+		{0.0, 0.9},   // 2
+		{0.0, 1.9},   // 3
+		{-0.3, 2.8},  // 4
+		{-0.7, 3.7},  // 5
+		{-1.2, 4.6},  // 6
+		{-1.9, 5.4},  // 7
+		{-2.5, 6.2},  // 8
+		{-3.0, 6.8},  // 9
+		{-3.4, 7.3},  // 10
+		{-2.8, 7.8},  // 11
+		{-1.8, 8.2},  // 12
+		{-0.8, 8.4},  // 13
+		{0.2, 8.6},   // 14
+		{1.2, 8.8},   // 15
+		{2.2, 9.0},   // 16
+		{3.0, 9.1},   // 17
+		{3.6, 9.2},   // 18
+		{3.2, 9.3},   // 19
+		{2.2, 9.4},   // 20
+		{1.2, 9.5},   // 21
+		{0.2, 9.6},   // 22
+		{-0.8, 9.7},  // 23
+		{-1.8, 9.8},  // 24
+		{-2.8, 9.9},  // 25
+		{-3.4, 10.0}, // 26
+		{-3.0, 10.1}, // 27
+		{-2.5, 10.2}, // 28
+		{-1.9, 10.3}, // 29
+		{-1.2, 10.4}, // 30
+	},
+	common.EqM4A4: {
+		{0.0, 0.0},  // 1
+		{0.0, 0.8},  // 2
+		{0.0, 1.6},  // 3
+		{0.2, 2.4},  // 4
+		{0.5, 3.1},  // 5
+		{0.9, 3.9},  // 6
+		{1.3, 4.6},  // 7
+		{1.6, 5.2},  // 8
+		{1.8, 5.7},  // 9
+		{1.6, 6.2},  // 10
+		{1.0, 6.6},  // 11
+		{0.0, 6.9},  // 12
+		{-1.0, 7.1}, // 13
+		{-2.0, 7.3}, // 14
+		{-2.7, 7.4}, // 15
+		{-3.2, 7.5}, // 16
+		{-2.8, 7.6}, // 17
+		{-1.8, 7.7}, // 18
+		{-0.8, 7.8}, // 19
+		{0.2, 7.9},  // 20
+	},
+	common.EqMP9: {
+		{0.0, 0.0},  // 1
+		{0.0, 0.7},  // 2
+		{0.1, 1.5},  // 3
+		{0.3, 2.3},  // 4
+		{0.6, 3.1},  // 5
+		{1.0, 3.8},  // 6
+		{1.4, 4.4},  // 7
+		{1.8, 4.9},  // 8
+		{1.5, 5.3},  // 9
+		{0.7, 5.7},  // 10
+		{-0.3, 6.0}, // 11
+		{-1.3, 6.2}, // 12
+		{-2.0, 6.4}, // 13
+		{-1.6, 6.6}, // 14
+		{-0.6, 6.8}, // 15
+		{0.4, 7.0},  // 16
+		{1.3, 7.2},  // 17
+		{1.9, 7.3},  // 18
+		{1.4, 7.4},  // 19
+		{0.4, 7.5},  // 20
+	},
+	// Add patterns for other common weapons
+	common.EqM4A1: {
+		{0.0, 0.0},  // 1
+		{0.0, 0.7},  // 2
+		{0.0, 1.5},  // 3
+		{0.2, 2.2},  // 4
+		{0.4, 2.9},  // 5
+		{0.8, 3.5},  // 6
+		{1.1, 4.1},  // 7
+		{1.4, 4.7},  // 8
+		{1.6, 5.2},  // 9
+		{1.4, 5.6},  // 10
+		{0.9, 6.0},  // 11
+		{0.0, 6.3},  // 12
+		{-0.9, 6.5}, // 13
+		{-1.8, 6.7}, // 14
+		{-2.4, 6.9}, // 15
+		{-2.9, 7.0}, // 16
+		{-2.5, 7.1}, // 17
+		{-1.6, 7.2}, // 18
+		{-0.7, 7.3}, // 19
+		{0.2, 7.4},  // 20
+	},
+	common.EqP90: {
+		{0.0, 0.0},  // 1
+		{0.0, 0.5},  // 2
+		{0.0, 1.0},  // 3
+		{0.1, 1.5},  // 4
+		{0.3, 2.0},  // 5
+		{0.5, 2.5},  // 6
+		{0.8, 2.9},  // 7
+		{1.1, 3.3},  // 8
+		{1.3, 3.7},  // 9
+		{1.0, 4.0},  // 10
+		{0.5, 4.3},  // 11
+		{0.0, 4.5},  // 12
+		{-0.5, 4.7}, // 13
+		{-1.0, 4.9}, // 14
+		{-1.3, 5.1}, // 15
+		{-1.0, 5.3}, // 16
+		{-0.5, 5.5}, // 17
+		{0.0, 5.7},  // 18
+		{0.5, 5.9},  // 19
+		{1.0, 6.1},  // 20
+		{1.3, 6.3},  // 21
+		{1.0, 6.5},  // 22
+		{0.5, 6.7},  // 23
+		{0.0, 6.9},  // 24
+		{-0.5, 7.1}, // 25
+		{-1.0, 7.3}, // 26
+		{-1.3, 7.5}, // 27
+		{-1.0, 7.7}, // 28
+		{-0.5, 7.9}, // 29
+		{0.0, 8.1},  // 30
+	},
+}
+
 // RecoilControlCollector tracks recoil control efficiency to detect no-recoil scripts
 type RecoilControlCollector struct {
 	*BaseCollector
@@ -143,17 +279,7 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 			// Check if the bullet is in the range we want to analyze (4-30)
 			if state.bulletIndex >= 4 && state.bulletIndex <= rc.maxBulletIdx {
 				// Get the expected recoil offsets for this bullet index (in degrees)
-				expectedYawOffset, expectedPitchOffset, ok := getRecoilOffsets(state.weapon, state.bulletIndex)
-
-				// Skip this bullet if pattern lookup failed
-				if !ok {
-					if rc.debugMode {
-						fmt.Printf("[DEBUG] B%02d Player:%d Weapon:%s Bullet:%d - No spray pattern found\n",
-							state.burstID, steamID, state.weaponName, state.bulletIndex)
-					}
-					state.lastFireTick = currentTick
-					return
-				}
+				expectedYawOffset, expectedPitchOffset := getRecoilOffsets(state.weapon, state.bulletIndex)
 
 				// Calculate expected aim angles (in degrees)
 				// We subtract offsets because we want to compensate for recoil
@@ -372,18 +498,10 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 			Description: "Mean angular error in recoil control (degrees)",
 		})
 
-		// Calculate recoil efficiency score
-		// 0% at 1.0 degrees or higher, 100% at 0.3 degrees or lower, linear in between
-		recoilEfficiency := 0.0
-		if meanError <= rc.perfectThreshold {
-			recoilEfficiency = 100.0
-		} else if meanError < 1.0 {
-			// Linear scale from perfect (0.3°) to poor (1.0°)
-			recoilEfficiency = 100.0 * (1.0 - ((meanError - rc.perfectThreshold) / (1.0 - rc.perfectThreshold)))
-		}
-
-		// Ensure efficiency is between 0-100%
-		recoilEfficiency = math.Max(0.0, math.Min(100.0, recoilEfficiency))
+		// Calculate recoil efficiency score using the formula provided by user:
+		// recoilEff := 1 - clamp01((meanErr - 0.30) / 0.45)
+		// 0% at 0.75 degrees or higher, 100% at 0.3 degrees or lower
+		recoilEfficiency := 100.0 * (1.0 - clamp01((meanError-0.3)/0.45))
 
 		playerStats.AddMetric(Category("recoil"), Key("recoil_efficiency"), Metric{
 			Type:        MetricPercentage,
@@ -391,9 +509,8 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 			Description: "Recoil control efficiency (higher is more suspicious)",
 		})
 
-		// Calculate recoil score for the cheat detector using the specified formula
-		// 0 at 0.75° or higher, 1 at 0.30° or lower, linear in between
-		recoilScore := clamp01((0.75 - meanError) / 0.45)
+		// Calculate recoil score for the cheat detector (0-1 scale)
+		recoilScore := clamp01((0.75 - meanError) / 0.45) // 0 at 0.75°, 1 at 0.30°
 
 		playerStats.AddMetric(Category("recoil"), Key("recoil_score"), Metric{
 			Type:        MetricFloat,
@@ -508,8 +625,8 @@ func isAutomaticWeapon(weapon *common.Equipment) bool {
 
 // getRecoilOffsets returns the expected yaw/pitch offsets for a specific weapon and bullet index
 // These are approximations of the recoil patterns for different weapons
-// Returns values in DEGREES and a boolean indicating if the lookup succeeded
-func getRecoilOffsets(weaponType common.EquipmentType, bulletIndex int) (float64, float64, bool) {
+// Returns values in DEGREES
+func getRecoilOffsets(weaponType common.EquipmentType, bulletIndex int) (float64, float64) {
 	// Clamp bullet index to prevent out-of-bounds access
 	if bulletIndex < 1 {
 		bulletIndex = 1
@@ -517,154 +634,25 @@ func getRecoilOffsets(weaponType common.EquipmentType, bulletIndex int) (float64
 		bulletIndex = 30
 	}
 
-	// Approximate patterns for common automatic weapons
-	// Format: {yaw offset, pitch offset} in DEGREES
-	recoilPatterns := map[common.EquipmentType][][]float64{
-		common.EqAK47: {
-			{0.0, 0.0},   // Bullet 1 (no recoil)
-			{0.0, 1.0},   // Bullet 2
-			{0.0, 2.5},   // Bullet 3
-			{0.2, 4.0},   // Bullet 4
-			{0.5, 5.5},   // Bullet 5
-			{1.0, 7.0},   // Bullet 6
-			{2.0, 8.5},   // Bullet 7
-			{3.0, 9.5},   // Bullet 8
-			{3.5, 10.0},  // Bullet 9
-			{2.5, 10.5},  // Bullet 10
-			{0.0, 11.0},  // Bullet 11
-			{-2.5, 11.5}, // Bullet 12
-			{-4.0, 12.0}, // Bullet 13
-			{-5.0, 12.5}, // Bullet 14
-			{-5.5, 13.0}, // Bullet 15
-			{-5.0, 13.5}, // Bullet 16
-			{-4.0, 14.0}, // Bullet 17
-			{-2.0, 14.5}, // Bullet 18
-			{0.0, 15.0},  // Bullet 19
-			{2.0, 15.5},  // Bullet 20
-			{4.0, 16.0},  // Bullet 21
-			{5.0, 16.5},  // Bullet 22
-			{5.5, 17.0},  // Bullet 23
-			{5.0, 17.5},  // Bullet 24
-			{4.0, 18.0},  // Bullet 25
-			{2.0, 18.5},  // Bullet 26
-			{0.0, 19.0},  // Bullet 27
-			{-2.0, 19.5}, // Bullet 28
-			{-4.0, 20.0}, // Bullet 29
-			{-5.0, 20.5}, // Bullet 30
-		},
-		common.EqM4A4: {
-			{0.0, 0.0},   // Bullet 1
-			{0.0, 0.8},   // Bullet 2
-			{0.0, 2.0},   // Bullet 3
-			{0.2, 3.5},   // Bullet 4
-			{0.4, 5.0},   // Bullet 5
-			{0.8, 6.2},   // Bullet 6
-			{1.5, 7.0},   // Bullet 7
-			{2.5, 7.5},   // Bullet 8
-			{3.0, 8.0},   // Bullet 9
-			{2.0, 8.5},   // Bullet 10
-			{0.0, 9.0},   // Bullet 11
-			{-2.0, 9.5},  // Bullet 12
-			{-3.0, 10.0}, // Bullet 13
-			{-3.5, 10.2}, // Bullet 14
-			{-3.0, 10.5}, // Bullet 15
-			{-1.5, 10.8}, // Bullet 16
-			{0.0, 11.0},  // Bullet 17
-			{1.5, 11.2},  // Bullet 18
-			{2.5, 11.5},  // Bullet 19
-			{3.0, 11.8},  // Bullet 20
-		},
-		common.EqM4A1: {
-			{0.0, 0.0},  // Bullet 1
-			{0.0, 0.7},  // Bullet 2
-			{0.0, 1.8},  // Bullet 3
-			{0.1, 3.0},  // Bullet 4
-			{0.3, 4.5},  // Bullet 5
-			{0.7, 5.5},  // Bullet 6
-			{1.2, 6.2},  // Bullet 7
-			{2.0, 6.8},  // Bullet 8
-			{2.5, 7.2},  // Bullet 9
-			{1.8, 7.6},  // Bullet 10
-			{0.0, 8.0},  // Bullet 11
-			{-1.8, 8.2}, // Bullet 12
-			{-2.5, 8.5}, // Bullet 13
-			{-3.0, 8.7}, // Bullet 14
-			{-2.5, 9.0}, // Bullet 15
-			{-1.0, 9.2}, // Bullet 16
-			{0.0, 9.5},  // Bullet 17
-			{1.0, 9.7},  // Bullet 18
-			{2.0, 10.0}, // Bullet 19
-			{2.5, 10.2}, // Bullet 20
-		},
-		// Add patterns for other common weapons
-		common.EqMP9: {
-			{0.0, 0.0},  // Bullet 1
-			{0.0, 0.6},  // Bullet 2
-			{0.0, 1.5},  // Bullet 3
-			{0.2, 2.2},  // Bullet 4
-			{0.5, 3.0},  // Bullet 5
-			{1.0, 3.8},  // Bullet 6
-			{1.5, 4.5},  // Bullet 7
-			{2.0, 5.0},  // Bullet 8
-			{1.5, 5.5},  // Bullet 9
-			{0.5, 6.0},  // Bullet 10
-			{-0.5, 6.3}, // Bullet 11
-			{-1.5, 6.6}, // Bullet 12
-			{-2.0, 6.9}, // Bullet 13
-			{-1.5, 7.2}, // Bullet 14
-			{-0.5, 7.5}, // Bullet 15
-			{0.5, 7.8},  // Bullet 16
-			{1.5, 8.1},  // Bullet 17
-			{2.0, 8.4},  // Bullet 18
-			{1.5, 8.7},  // Bullet 19
-			{0.5, 9.0},  // Bullet 20
-		},
-		common.EqP90: {
-			{0.0, 0.0},  // Bullet 1
-			{0.0, 0.4},  // Bullet 2
-			{0.0, 1.0},  // Bullet 3
-			{0.1, 1.8},  // Bullet 4
-			{0.2, 2.5},  // Bullet 5
-			{0.4, 3.2},  // Bullet 6
-			{0.7, 3.8},  // Bullet 7
-			{1.0, 4.2},  // Bullet 8
-			{1.3, 4.5},  // Bullet 9
-			{1.0, 4.8},  // Bullet 10
-			{0.5, 5.1},  // Bullet 11
-			{0.0, 5.3},  // Bullet 12
-			{-0.5, 5.5}, // Bullet 13
-			{-1.0, 5.7}, // Bullet 14
-			{-1.3, 5.9}, // Bullet 15
-			{-1.0, 6.1}, // Bullet 16
-			{-0.5, 6.3}, // Bullet 17
-			{0.0, 6.5},  // Bullet 18
-			{0.5, 6.7},  // Bullet 19
-			{1.0, 6.9},  // Bullet 20
-		},
-	}
-
-	// Get pattern for this weapon
-	pattern, exists := recoilPatterns[weaponType]
-	if !exists || len(pattern) == 0 {
-		// Default pattern if specific weapon not defined
-		// Approximation: mostly vertical recoil increasing with bullet count
-		yawOffset := 0.0
-		if bulletIndex > 10 {
-			// After bullet 10, add some horizontal movement
-			phase := float64(bulletIndex-10) * 0.6
-			yawOffset = math.Sin(phase) * float64(bulletIndex) * 0.3
+	// Use the spray pattern map to get the offsets
+	if pattern, exists := SprayPattern[weaponType]; exists && len(pattern) > 0 {
+		if bulletIndex-1 < len(pattern) {
+			return pattern[bulletIndex-1][0], pattern[bulletIndex-1][1]
+		} else if len(pattern) > 0 {
+			// Use the last available pattern entry if we're beyond the pattern length
+			lastIdx := len(pattern) - 1
+			return pattern[lastIdx][0], pattern[lastIdx][1]
 		}
-		pitchOffset := math.Min(float64(bulletIndex)*0.7, 20.0)
-		return yawOffset, pitchOffset, true
 	}
 
-	// If we have fewer pattern entries than the bullet index
-	if bulletIndex-1 >= len(pattern) {
-		if len(pattern) == 0 {
-			return 0, 0, false // Empty pattern, bail out
-		}
-		return pattern[len(pattern)-1][0], pattern[len(pattern)-1][1], true
+	// Default pattern if specific weapon not defined
+	// Approximation: mostly vertical recoil increasing with bullet count
+	yawOffset := 0.0
+	if bulletIndex > 10 {
+		// After bullet 10, add some horizontal movement
+		phase := float64(bulletIndex-10) * 0.6
+		yawOffset = math.Sin(phase) * float64(bulletIndex) * 0.3
 	}
-
-	return pattern[bulletIndex-1][0], pattern[bulletIndex-1][1], true
+	pitchOffset := math.Min(float64(bulletIndex)*0.7, 20.0)
+	return yawOffset, pitchOffset
 }
