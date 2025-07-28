@@ -86,7 +86,7 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		reactionSamples = metric.IntValue
 	}
 
-	// === Calculate cheat score using rule-based model (updated parameters) ===
+	// === Calculate cheat score using rule-based model ===
 
 	// Headshot factor - only apply if player has at least 30 kills
 	// 0 at 55%, 1 at 75%
@@ -95,11 +95,13 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		hsScore = clamp01((hsPercentage - 55.0) / 20.0)
 	}
 
-	// Snap velocity factor
-	// 0 at 2°/ms, 1 at 4°/ms (updated thresholds)
+	// Snap velocity factor - consider increasing sensitivity
+	// Currently: 0 at 2°/ms, 1 at 4°/ms
+	// Suggested: 0 at 2°/ms, 1 at 3.5°/ms for sharper ramp
 	snapScore := 0.0
 	if snapCount >= 5 { // Need at least a few snaps for reliable data
-		snapScore = clamp01((p95SnapVelocity - 2.0) / 2.0)
+		// Using the suggested sharper ramp: 2°/ms → 0, 3.5°/ms → 1
+		snapScore = clamp01((p95SnapVelocity - 2.0) / 1.5)
 	}
 
 	// Reaction time factor
@@ -109,11 +111,13 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		rtScore = clamp01((120.0 - p10Reaction) / 60.0)
 	}
 
-	// Calculate combined cheat score with new weighting that includes reaction time
-	// 0.5*hsScore + 0.3*snapScore + 0.2*rtScore
+	// Calculate combined cheat score with weights:
+	// - 50% headshot score (precision)
+	// - 30% snap score (mechanics)
+	// - 20% reaction time score (mechanics)
 	cheatScore := 0.5*hsScore + 0.3*snapScore + 0.2*rtScore
 
-	// Flag as cheater if score >= 0.55 (55%) - updated threshold
+	// Flag as cheater if score >= 0.55 (55%)
 	// Convert to percentage for reporting
 	cheatLikelihood := cheatScore * 100.0
 

@@ -11,8 +11,8 @@ import (
 
 // Constants for reaction time calculations
 const (
-	// FOV in degrees to check if an enemy is in view (approximately 10 degrees for rifles)
-	ReactionFOVDegrees = 10.0
+	// FOV in degrees to check if an enemy is in view (reduced from 10 to 5 degrees for rifles to reduce false positives)
+	ReactionFOVDegrees = 5.0
 
 	// Minimum number of reaction time samples needed for meaningful statistics
 	MinReactionSamples = 5
@@ -63,6 +63,14 @@ func (rtc *ReactionTimeCollector) Setup(parser demoinfocs.Parser, demoStats *Dem
 		if e.Victim != nil {
 			rtc.clearEntryTicksForPlayer(e.Victim.SteamID64)
 		}
+		if e.Killer != nil {
+			rtc.clearEntryTicksForPlayer(e.Killer.SteamID64)
+		}
+	})
+
+	// Register player hurt event to track hits in conjunction with weapon fire
+	parser.RegisterEventHandler(func(e events.PlayerHurt) {
+		// Currently not used, but could be implemented to only count shots that hit
 	})
 }
 
@@ -87,16 +95,20 @@ func (rtc *ReactionTimeCollector) processWeaponFire(e events.WeaponFire, parser 
 		// Calculate reaction time in milliseconds
 		deltaT := float64(rtc.currentTick-entryTick) * (1000.0 / rtc.tickRate)
 
-		// Store the reaction time
-		if _, exists := rtc.reactionTimes[shooter.SteamID64]; !exists {
-			rtc.reactionTimes[shooter.SteamID64] = make([]float64, 0)
-		}
-		rtc.reactionTimes[shooter.SteamID64] = append(rtc.reactionTimes[shooter.SteamID64], deltaT)
+		// Filter out unrealistic reaction times (too long)
+		// This is a sanity check in case FOV clearing logic fails
+		if deltaT <= 2000.0 { // Ignore reactions longer than 2 seconds
+			// Store the reaction time
+			if _, exists := rtc.reactionTimes[shooter.SteamID64]; !exists {
+				rtc.reactionTimes[shooter.SteamID64] = make([]float64, 0)
+			}
+			rtc.reactionTimes[shooter.SteamID64] = append(rtc.reactionTimes[shooter.SteamID64], deltaT)
 
-		// Get or create player stats
-		playerStats := demoStats.GetOrCreatePlayerStats(shooter)
-		if playerStats != nil {
-			playerStats.IncrementIntMetric(Category("reaction"), Key("shots_after_fov_entry"))
+			// Get or create player stats
+			playerStats := demoStats.GetOrCreatePlayerStats(shooter)
+			if playerStats != nil {
+				playerStats.IncrementIntMetric(Category("reaction"), Key("shots_after_fov_entry"))
+			}
 		}
 	}
 
@@ -152,6 +164,14 @@ func (rtc *ReactionTimeCollector) CollectFrame(parser demoinfocs.Parser, demoSta
 			rtc.entryTicks[attackerID] = make(map[uint64]int)
 		}
 
+		// Create a list of victims to remove (those who left FOV)
+		opponentsToRemove := make([]uint64, 0)
+
+		// First mark all current entries for potential removal
+		for opponentID := range rtc.entryTicks[attackerID] {
+			opponentsToRemove = append(opponentsToRemove, opponentID)
+		}
+
 		// Check each opponent
 		for _, opponent := range gs.Participants().Playing() {
 			// Skip if same team, self, or not alive
@@ -187,10 +207,20 @@ func (rtc *ReactionTimeCollector) CollectFrame(parser demoinfocs.Parser, demoSta
 				if _, exists := rtc.entryTicks[attackerID][opponentID]; !exists {
 					rtc.entryTicks[attackerID][opponentID] = rtc.currentTick
 				}
-			} else {
-				// If opponent is not in FOV, remove any entry tick
-				delete(rtc.entryTicks[attackerID], opponentID)
+
+				// Remove this opponent from the removal list since they're still in FOV
+				for i, id := range opponentsToRemove {
+					if id == opponentID {
+						opponentsToRemove = append(opponentsToRemove[:i], opponentsToRemove[i+1:]...)
+						break
+					}
+				}
 			}
+		}
+
+		// Remove any opponents that left the FOV
+		for _, opponentID := range opponentsToRemove {
+			delete(rtc.entryTicks[attackerID], opponentID)
 		}
 	}
 }
