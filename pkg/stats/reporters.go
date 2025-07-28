@@ -5,7 +5,6 @@ import (
 	"io"
 	"sort"
 	"strings"
-	"text/tabwriter"
 )
 
 // Reporter defines the interface for statistics output formatters
@@ -124,69 +123,95 @@ func (tr *TextReporter) reportCategory(demoStats *DemoStats, category Category, 
 		return nil
 	}
 
-	// Get players and sort by name
+	// Get players
 	players := make([]*PlayerStats, 0, len(demoStats.Players))
 	for _, playerStats := range demoStats.Players {
 		players = append(players, playerStats)
 	}
-	sort.Slice(players, func(i, j int) bool {
-		return players[i].Player.Name < players[j].Player.Name
-	})
 
-	// Set up tabwriter for aligned columns
-	w := tabwriter.NewWriter(writer, 0, 0, 3, ' ', tabwriter.TabIndent)
+	// Sort players based on category
+	if category == Category("anti_cheat") {
+		// For anti-cheat category, sort by cheating likelihood (highest first)
+		sort.Slice(players, func(i, j int) bool {
+			iLikelihood := float64(0)
+			jLikelihood := float64(0)
+
+			if metric, found := players[i].GetMetric(category, Key("cheat_likelihood")); found {
+				iLikelihood = metric.FloatValue
+			}
+
+			if metric, found := players[j].GetMetric(category, Key("cheat_likelihood")); found {
+				jLikelihood = metric.FloatValue
+			}
+
+			return iLikelihood > jLikelihood
+		})
+	} else {
+		// For other categories, sort by name
+		sort.Slice(players, func(i, j int) bool {
+			return players[i].Player.Name < players[j].Player.Name
+		})
+	}
+
+	// Create fixed width table instead of tabwriter
+	playerWidth := 20
+	steamIDWidth := 20
+	valueWidth := 12
 
 	// Print header
-	_, err = fmt.Fprint(w, "Player\tSteam ID")
-	if err != nil {
-		return err
-	}
+	fmt.Fprintf(writer, "%-*s  %-*s  ", playerWidth, "Player", steamIDWidth, "Steam ID")
 
 	for _, key := range displayKeys {
-		_, err = fmt.Fprintf(w, "\t%s", formatColumnTitle(string(key)))
-		if err != nil {
-			return err
-		}
-	}
-	_, err = fmt.Fprintln(w)
-	if err != nil {
-		return err
+		fmt.Fprintf(writer, "%-*s  ", valueWidth, formatColumnTitle(string(key)))
 	}
 
-	// Print separator
-	headerLength := 40 + (15 * len(displayKeys))
-	_, err = fmt.Fprintln(w, strings.Repeat("-", headerLength))
-	if err != nil {
-		return err
+	// For anti-cheat, add a "Cheater" column
+	if category == Category("anti_cheat") {
+		fmt.Fprintf(writer, "%-*s", 7, "Cheater")
 	}
+
+	fmt.Fprintln(writer)
+
+	// Print separator
+	headerLength := playerWidth + steamIDWidth + (valueWidth * len(displayKeys)) + (len(displayKeys) * 2) + 4
+	if category == Category("anti_cheat") {
+		headerLength += 9 // Extra for the "Cheater" column
+	}
+	fmt.Fprintln(writer, strings.Repeat("-", headerLength))
 
 	// Print each player's stats
 	for _, playerStats := range players {
-		_, err = fmt.Fprintf(w, "%s\t%d", playerStats.Player.Name, playerStats.Player.SteamID64)
-		if err != nil {
-			return err
-		}
+		fmt.Fprintf(writer, "%-*s  %-*d  ", playerWidth, playerStats.Player.Name, steamIDWidth, playerStats.Player.SteamID64)
+
+		// Used to track cheat likelihood for the "Cheater" column
+		cheatLikelihood := float64(0)
 
 		for _, key := range displayKeys {
 			if metric, found := playerStats.GetMetric(category, key); found {
-				_, err = fmt.Fprintf(w, "\t%s", formatMetricValue(metric))
-				if err != nil {
-					return err
+				fmt.Fprintf(writer, "%-*s  ", valueWidth, formatMetricValue(metric))
+
+				// Store cheat likelihood for later
+				if category == Category("anti_cheat") && key == Key("cheat_likelihood") {
+					cheatLikelihood = metric.FloatValue
 				}
 			} else {
-				_, err = fmt.Fprint(w, "\t-")
-				if err != nil {
-					return err
-				}
+				fmt.Fprintf(writer, "%-*s  ", valueWidth, "-")
 			}
 		}
-		_, err = fmt.Fprintln(w)
-		if err != nil {
-			return err
+
+		// Add "Yes/No" column for anti-cheat category
+		if category == Category("anti_cheat") {
+			if cheatLikelihood >= 90.0 {
+				fmt.Fprintf(writer, "%-7s", "Yes")
+			} else {
+				fmt.Fprintf(writer, "%-7s", "No")
+			}
 		}
+
+		fmt.Fprintln(writer)
 	}
 
-	return w.Flush()
+	return nil
 }
 
 // formatColumnTitle formats a key into a column title
