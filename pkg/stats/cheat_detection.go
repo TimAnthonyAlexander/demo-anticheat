@@ -61,6 +61,8 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 	snapCount := int64(0)
 	p10Reaction := 0.0
 	reactionSamples := int64(0)
+	recoilEfficiency := 0.0
+	meanAngularError := -1.0 // -1 indicates no data
 
 	if metric, found := playerStats.GetMetric(Category("kills"), Key("headshot_percentage")); found {
 		hsPercentage = metric.FloatValue
@@ -86,6 +88,14 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		reactionSamples = metric.IntValue
 	}
 
+	if metric, found := playerStats.GetMetric(Category("recoil"), Key("recoil_efficiency")); found {
+		recoilEfficiency = metric.FloatValue
+	}
+
+	if metric, found := playerStats.GetMetric(Category("recoil"), Key("mean_angular_error")); found {
+		meanAngularError = metric.FloatValue
+	}
+
 	// === Calculate cheat score using rule-based model ===
 
 	// Headshot factor - only apply if player has at least 30 kills
@@ -95,12 +105,10 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		hsScore = clamp01((hsPercentage - 55.0) / 20.0)
 	}
 
-	// Snap velocity factor - consider increasing sensitivity
-	// Currently: 0 at 2°/ms, 1 at 4°/ms
-	// Suggested: 0 at 2°/ms, 1 at 3.5°/ms for sharper ramp
+	// Snap velocity factor
+	// 0 at 2°/ms, 1 at 3.5°/ms for sharper ramp
 	snapScore := 0.0
 	if snapCount >= 5 { // Need at least a few snaps for reliable data
-		// Using the suggested sharper ramp: 2°/ms → 0, 3.5°/ms → 1
 		snapScore = clamp01((p95SnapVelocity - 2.0) / 1.5)
 	}
 
@@ -111,11 +119,19 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		rtScore = clamp01((120.0 - p10Reaction) / 60.0)
 	}
 
-	// Calculate combined cheat score with weights:
-	// - 50% headshot score (precision)
-	// - 30% snap score (mechanics)
-	// - 20% reaction time score (mechanics)
-	cheatScore := 0.5*hsScore + 0.3*snapScore + 0.2*rtScore
+	// Recoil control factor
+	// Already scaled 0-100%, but we normalize to 0-1 range
+	recoilScore := 0.0
+	if meanAngularError >= 0 { // Check if we have valid recoil data
+		recoilScore = recoilEfficiency / 100.0
+	}
+
+	// Calculate combined cheat score with adjusted weights as specified:
+	// - 45% headshot score (reduced from 50%)
+	// - 25% snap score (reduced from 30%)
+	// - 15% reaction time score (reduced from 20%)
+	// - 15% recoil control score (new component)
+	cheatScore := 0.45*hsScore + 0.25*snapScore + 0.15*rtScore + 0.15*recoilScore
 
 	// Flag as cheater if score >= 0.55 (55%)
 	// Convert to percentage for reporting
@@ -138,6 +154,12 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		Type:        MetricFloat,
 		FloatValue:  rtScore,
 		Description: "Reaction time-based cheat score component (0-1)",
+	})
+
+	playerStats.AddMetric(Category("anti_cheat"), Key("recoil_score"), Metric{
+		Type:        MetricFloat,
+		FloatValue:  recoilScore,
+		Description: "Recoil control-based cheat score component (0-1)",
 	})
 
 	playerStats.AddMetric(Category("anti_cheat"), Key("total_cheat_score"), Metric{

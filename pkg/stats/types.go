@@ -32,6 +32,8 @@ const (
 	MetricFloat MetricType = "float"
 	// MetricInteger represents an integer value
 	MetricInteger MetricType = "integer"
+	// MetricString represents a string value
+	MetricString MetricType = "string"
 )
 
 // Metric represents a single statistical measure
@@ -40,6 +42,7 @@ type Metric struct {
 	FloatValue    float64
 	IntValue      int64
 	DurationValue time.Duration
+	StringValue   string
 	Description   string
 }
 
@@ -100,6 +103,28 @@ func (ps *PlayerStats) IncrementIntMetric(category Category, key Key) {
 	}
 }
 
+// IncrementFloatMetric adds a value to a float metric
+func (ps *PlayerStats) IncrementFloatMetric(category Category, key Key, value float64) {
+	if _, exists := ps.Categories[category]; !exists {
+		ps.Categories[category] = make(map[Key]Metric)
+		ps.Categories[category][key] = Metric{
+			Type:       MetricFloat,
+			FloatValue: value,
+		}
+		return
+	}
+
+	if metric, found := ps.Categories[category][key]; found {
+		metric.FloatValue += value
+		ps.Categories[category][key] = metric
+	} else {
+		ps.Categories[category][key] = Metric{
+			Type:       MetricFloat,
+			FloatValue: value,
+		}
+	}
+}
+
 // DemoStats contains statistics for all players in a demo
 type DemoStats struct {
 	Players   map[uint64]*PlayerStats
@@ -126,4 +151,19 @@ func (ds *DemoStats) GetOrCreatePlayerStats(player *common.Player) *PlayerStats 
 		ds.Players[player.SteamID64] = NewPlayerStats(player)
 	}
 	return ds.Players[player.SteamID64]
+}
+
+// GetOrCreatePlayerStatsBySteamID gets existing player stats or creates new ones by SteamID
+func (ds *DemoStats) GetOrCreatePlayerStatsBySteamID(steamID uint64) *PlayerStats {
+	if _, exists := ds.Players[steamID]; !exists {
+		// Create a placeholder player
+		ds.Players[steamID] = &PlayerStats{
+			Player: PlayerIdentifier{
+				SteamID64: steamID,
+				Name:      "Unknown",
+			},
+			Categories: make(map[Category]map[Key]Metric),
+		}
+	}
+	return ds.Players[steamID]
 }
