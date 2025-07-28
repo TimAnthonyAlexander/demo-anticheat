@@ -408,6 +408,19 @@ func (rc *RecoilControlCollector) finalizeBurst(state *sprayState, steamID uint6
 		IntValue:    currentWeaponCount + int64(state.countedBullets),
 		Description: fmt.Sprintf("Bullets analyzed for %s", state.weaponName),
 	})
+	
+	// Track weapon-specific error sums for per-weapon stats
+	weaponErrorKey := Key(fmt.Sprintf("%s_error_sum", weaponTypeToString(state.weapon)))
+	currentWeaponErrorSum := 0.0
+	if metric, found := playerStats.GetMetric(Category("recoil"), weaponErrorKey); found {
+		currentWeaponErrorSum = metric.FloatValue
+	}
+	
+	playerStats.AddMetric(Category("recoil"), weaponErrorKey, Metric{
+		Type:        MetricFloat,
+		FloatValue:  currentWeaponErrorSum + state.sumError,
+		Description: fmt.Sprintf("Error sum for %s", state.weaponName),
+	})
 
 	// Add burst-specific mean error for debugging
 	if rc.debugMode {
@@ -426,18 +439,6 @@ func (rc *RecoilControlCollector) finalizeBurst(state *sprayState, steamID uint6
 	state.countedBullets = 0
 }
 
-// CollectFrame checks for expired bursts
-func (rc *RecoilControlCollector) CollectFrame(parser demoinfocs.Parser, demoStats *DemoStats) {
-	currentTick := parser.CurrentFrame()
-
-	// Check for expired bursts (player stopped firing)
-	for steamID, state := range rc.sprayStates {
-		if state.inBurst && (currentTick-state.lastFireTick > rc.maxBurstGap) {
-			rc.finalizeBurst(state, steamID, demoStats)
-		}
-	}
-}
-
 // CollectFinalStats calculates final recoil control statistics
 func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 	// Finalize any active bursts
@@ -446,84 +447,139 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 			rc.finalizeBurst(state, steamID, demoStats)
 		}
 	}
+	
+	// List of weapons we want to prioritize in output
+	priorityWeapons := []common.EquipmentType{
+		common.EqAK47,
+		common.EqM4A4,
+		common.EqMP9,
+	}
 
 	// Calculate final stats for each player
 	for steamID, playerStats := range demoStats.Players {
 		totalErrorSum, foundError := playerStats.GetMetric(Category("recoil"), Key("total_error_sum"))
 		totalBullets, foundBullets := playerStats.GetMetric(Category("recoil"), Key("total_counted_bullets"))
-		burstCount, foundBursts := playerStats.GetMetric(Category("recoil"), Key("burst_count"))
+		burstCount, _ := playerStats.GetMetric(Category("recoil"), Key("burst_count"))
 
-		// Skip if insufficient data
-		if !foundError || !foundBullets || !foundBursts ||
-			totalBullets.IntValue < 10 || burstCount.IntValue < 2 {
-
+		// Calculate mean error if we have any data at all
+		if foundError && foundBullets && totalBullets.IntValue > 0 {
+			meanError := totalErrorSum.FloatValue / float64(totalBullets.IntValue)
+			
 			if rc.debugMode {
-				fmt.Printf("[DEBUG] Player:%d - Insufficient data: errorFound=%v, bulletsFound=%v, burstsFound=%v, bullets=%d, bursts=%d\n",
-					steamID, foundError, foundBullets, foundBursts,
-					totalBullets.IntValue, burstCount.IntValue)
+				fmt.Printf("[DEBUG] Player:%d - Final calculation: bullets=%d, sum=%.2f°, mean=%.2f°\n",
+					steamID, totalBullets.IntValue, totalErrorSum.FloatValue, meanError)
 			}
 
+			// Store mean angular error
+			playerStats.AddMetric(Category("recoil"), Key("mean_angular_error"), Metric{
+				Type:        MetricFloat,
+				FloatValue:  meanError,
+				Description: "Mean angular error in recoil control (degrees)",
+			})
+			
+			// Only calculate recoil efficiency if we have sufficient data
+			if totalBullets.IntValue >= 10 && burstCount.IntValue >= 2 {
+				// Calculate recoil efficiency score using the formula provided by user:
+				// recoilEff := 1 - clamp01((meanErr - 0.30) / 0.45)
+				// 0% at 0.75 degrees or higher, 100% at 0.3 degrees or lower
+				recoilEfficiency := 100.0 * (1.0 - clamp01((meanError-0.3)/0.45))
+
+				playerStats.AddMetric(Category("recoil"), Key("recoil_efficiency"), Metric{
+					Type:        MetricPercentage,
+					FloatValue:  recoilEfficiency,
+					Description: "Recoil control efficiency (higher is more suspicious)",
+				})
+
+				// Calculate recoil score for the cheat detector (0-1 scale)
+				recoilScore := clamp01((0.75 - meanError) / 0.45) // 0 at 0.75°, 1 at 0.30°
+
+				playerStats.AddMetric(Category("recoil"), Key("recoil_score"), Metric{
+					Type:        MetricFloat,
+					FloatValue:  recoilScore,
+					Description: "Recoil score component for cheat detection (0-1)",
+				})
+
+				// Add interpretation
+				playerStats.AddMetric(Category("recoil"), Key("recoil_interpretation"), Metric{
+					Type:        MetricString,
+					StringValue: interpretation(meanError, rc.perfectThreshold, rc.goodThreshold),
+					Description: "Interpretation of recoil control ability",
+				})
+			} else {
+				// Not enough data for reliable efficiency calculation
+				playerStats.AddMetric(Category("recoil"), Key("recoil_efficiency"), Metric{
+					Type:        MetricPercentage,
+					FloatValue:  0,
+					Description: "Recoil control efficiency - insufficient data (need 10+ bullets across 2+ bursts)",
+				})
+				
+				playerStats.AddMetric(Category("recoil"), Key("recoil_score"), Metric{
+					Type:        MetricFloat,
+					FloatValue:  0,
+					Description: "Recoil score component - insufficient data",
+				})
+				
+				playerStats.AddMetric(Category("recoil"), Key("recoil_interpretation"), Metric{
+					Type:        MetricString,
+					StringValue: "Insufficient data",
+					Description: "Interpretation of recoil control ability",
+				})
+			}
+		} else {
+			// No data at all
 			playerStats.AddMetric(Category("recoil"), Key("mean_angular_error"), Metric{
 				Type:        MetricFloat,
 				FloatValue:  0,
-				Description: "Mean angular error in recoil control (degrees) - insufficient data",
+				Description: "Mean angular error in recoil control (degrees) - no data",
 			})
 
 			playerStats.AddMetric(Category("recoil"), Key("recoil_efficiency"), Metric{
 				Type:        MetricPercentage,
 				FloatValue:  0,
-				Description: "Recoil control efficiency (higher is more suspicious) - insufficient data",
+				Description: "Recoil control efficiency - no data",
 			})
-
-			continue
+			
+			playerStats.AddMetric(Category("recoil"), Key("recoil_score"), Metric{
+				Type:        MetricFloat,
+				FloatValue:  0,
+				Description: "Recoil score component - no data",
+			})
 		}
-
-		// Double check to avoid division by zero
-		if totalBullets.IntValue <= 0 {
-			continue
+		
+		// Calculate weapon-specific stats for priority weapons
+		for _, weaponType := range priorityWeapons {
+			weaponKey := Key(fmt.Sprintf("%s_bullets", weaponTypeToString(weaponType)))
+			weaponBullets, foundWeapon := playerStats.GetMetric(Category("recoil"), weaponKey)
+			
+			if foundWeapon && weaponBullets.IntValue > 0 {
+				// Calculate weapon-specific metrics if we have enough data
+				weaponErrorKey := Key(fmt.Sprintf("%s_error_sum", weaponTypeToString(weaponType)))
+				weaponErrorSum, foundWeaponError := playerStats.GetMetric(Category("recoil"), weaponErrorKey)
+				
+				if foundWeaponError && weaponErrorSum.FloatValue > 0 {
+					weaponMeanError := weaponErrorSum.FloatValue / float64(weaponBullets.IntValue)
+					
+					// Store weapon-specific mean error
+					playerStats.AddMetric(Category("recoil"), Key(fmt.Sprintf("%s_mean_error", weaponTypeToString(weaponType))), Metric{
+						Type:        MetricFloat,
+						FloatValue:  weaponMeanError,
+						Description: fmt.Sprintf("Mean error for %s (degrees)", weaponTypeToString(weaponType)),
+					})
+					
+					if weaponBullets.IntValue >= 5 {
+						// Only calculate efficiency if we have enough bullets
+						weaponEfficiency := 100.0 * (1.0 - clamp01((weaponMeanError-0.3)/0.45))
+						
+						// Store weapon-specific efficiency
+						playerStats.AddMetric(Category("recoil"), Key(fmt.Sprintf("%s_efficiency", weaponTypeToString(weaponType))), Metric{
+							Type:        MetricPercentage,
+							FloatValue:  weaponEfficiency,
+							Description: fmt.Sprintf("Recoil control efficiency for %s", weaponTypeToString(weaponType)),
+						})
+					}
+				}
+			}
 		}
-
-		// Calculate mean angular error across all bursts
-		meanError := totalErrorSum.FloatValue / float64(totalBullets.IntValue)
-
-		if rc.debugMode {
-			fmt.Printf("[DEBUG] Player:%d - Final calculation: bullets=%d, sum=%.2f°, mean=%.2f°\n",
-				steamID, totalBullets.IntValue, totalErrorSum.FloatValue, meanError)
-		}
-
-		// Store mean angular error
-		playerStats.AddMetric(Category("recoil"), Key("mean_angular_error"), Metric{
-			Type:        MetricFloat,
-			FloatValue:  meanError,
-			Description: "Mean angular error in recoil control (degrees)",
-		})
-
-		// Calculate recoil efficiency score using the formula provided by user:
-		// recoilEff := 1 - clamp01((meanErr - 0.30) / 0.45)
-		// 0% at 0.75 degrees or higher, 100% at 0.3 degrees or lower
-		recoilEfficiency := 100.0 * (1.0 - clamp01((meanError-0.3)/0.45))
-
-		playerStats.AddMetric(Category("recoil"), Key("recoil_efficiency"), Metric{
-			Type:        MetricPercentage,
-			FloatValue:  recoilEfficiency,
-			Description: "Recoil control efficiency (higher is more suspicious)",
-		})
-
-		// Calculate recoil score for the cheat detector (0-1 scale)
-		recoilScore := clamp01((0.75 - meanError) / 0.45) // 0 at 0.75°, 1 at 0.30°
-
-		playerStats.AddMetric(Category("recoil"), Key("recoil_score"), Metric{
-			Type:        MetricFloat,
-			FloatValue:  recoilScore,
-			Description: "Recoil score component for cheat detection (0-1)",
-		})
-
-		// Add interpretation
-		playerStats.AddMetric(Category("recoil"), Key("recoil_interpretation"), Metric{
-			Type:        MetricString,
-			StringValue: interpretation(meanError, rc.perfectThreshold, rc.goodThreshold),
-			Description: "Interpretation of recoil control ability",
-		})
 	}
 }
 

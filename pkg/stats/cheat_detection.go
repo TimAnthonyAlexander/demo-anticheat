@@ -61,8 +61,6 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 	snapCount := int64(0)
 	p10Reaction := 0.0
 	reactionSamples := int64(0)
-	recoilEfficiency := 0.0
-	meanAngularError := -1.0 // -1 indicates no data
 
 	if metric, found := playerStats.GetMetric(Category("kills"), Key("headshot_percentage")); found {
 		hsPercentage = metric.FloatValue
@@ -86,14 +84,6 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 
 	if metric, found := playerStats.GetMetric(Category("reaction"), Key("reaction_samples")); found {
 		reactionSamples = metric.IntValue
-	}
-
-	if metric, found := playerStats.GetMetric(Category("recoil"), Key("recoil_efficiency")); found {
-		recoilEfficiency = metric.FloatValue
-	}
-
-	if metric, found := playerStats.GetMetric(Category("recoil"), Key("mean_angular_error")); found {
-		meanAngularError = metric.FloatValue
 	}
 
 	// === Calculate cheat score using rule-based model ===
@@ -120,10 +110,11 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 	}
 
 	// Recoil control factor
-	// Already scaled 0-100%, but we normalize to 0-1 range
+	// Score is calculated directly in the recoil collector
+	// 0 at 0.75° mean error or higher, 1 at 0.30° mean error or lower
 	recoilScore := 0.0
-	if meanAngularError >= 0 { // Check if we have valid recoil data
-		recoilScore = recoilEfficiency / 100.0
+	if metric, found := playerStats.GetMetric(Category("recoil"), Key("recoil_score")); found {
+		recoilScore = metric.FloatValue
 	}
 
 	// Calculate combined cheat score with adjusted weights as specified:
@@ -167,6 +158,21 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		FloatValue:  cheatScore,
 		Description: "Total cheat score (0-1, ≥0.55 flags as cheater)",
 	})
+
+	// Mark as cheater if score exceeds threshold
+	if cheatScore >= 0.55 {
+		playerStats.AddMetric(Category("anti_cheat"), Key("cheater"), Metric{
+			Type:        MetricString,
+			StringValue: "Yes",
+			Description: "Player is flagged as a potential cheater",
+		})
+	} else {
+		playerStats.AddMetric(Category("anti_cheat"), Key("cheater"), Metric{
+			Type:        MetricString,
+			StringValue: "No",
+			Description: "Player is not flagged as a cheater",
+		})
+	}
 
 	return cheatLikelihood
 }
