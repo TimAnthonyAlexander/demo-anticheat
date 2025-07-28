@@ -25,17 +25,20 @@ type RecoilControlCollector struct {
 	goodThreshold    float64
 	perfectThreshold float64
 	debugMode        bool // Enable debugging
+	burstIDCounter   int  // For debug output
 }
 
 // sprayState tracks the state of a player's weapon spray
 type sprayState struct {
 	inBurst        bool
+	burstID        int
 	firstTick      int
-	firstYaw       float64 // In degrees, converted from radians
-	firstPitch     float64 // In degrees, converted from radians
+	firstYawDeg    float64 // In degrees
+	firstPitchDeg  float64 // In degrees
 	bulletIndex    int
 	lastFireTick   int
 	weapon         common.EquipmentType
+	weaponName     string
 	sumError       float64
 	countedBullets int
 }
@@ -45,12 +48,13 @@ func NewRecoilControlCollector() *RecoilControlCollector {
 	return &RecoilControlCollector{
 		BaseCollector:    NewBaseCollector("Recoil Control", Category("recoil")),
 		sprayStates:      make(map[uint64]*sprayState),
-		maxBurstGap:      6,    // Ticks between shots to consider it part of the same burst
-		minBurstSize:     4,    // Minimum bullets to consider a valid burst
-		maxBulletIdx:     30,   // Maximum bullets to track in a spray pattern
-		goodThreshold:    0.7,  // Threshold for good recoil control (in degrees)
-		perfectThreshold: 0.3,  // Threshold for suspiciously perfect recoil control (in degrees)
-		debugMode:        true, // Set to false in production
+		maxBurstGap:      6,     // Ticks between shots to consider it part of the same burst
+		minBurstSize:     4,     // Minimum bullets to consider a valid burst
+		maxBulletIdx:     30,    // Maximum bullets to track in a spray pattern
+		goodThreshold:    0.7,   // Threshold for good recoil control (in degrees)
+		perfectThreshold: 0.3,   // Threshold for suspiciously perfect recoil control (in degrees)
+		debugMode:        false, // Set to false in production
+		burstIDCounter:   1,     // Start at 1
 	}
 }
 
@@ -92,40 +96,39 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 		return
 	}
 
-	steamID := shooter.SteamID64
-	state, exists := rc.sprayStates[steamID]
+	// Get weapon name for debugging
+	weaponName := getWeaponName(weapon)
 
-	// Get actual aim angles (in radians from the library)
+	// Get view angles in DEGREES
 	actualYawRad := float64(shooter.ViewDirectionX())
 	actualPitchRad := float64(shooter.ViewDirectionY())
-
-	// Convert to degrees for consistency
 	actualYawDeg := actualYawRad * RecoilRadToDeg
 	actualPitchDeg := actualPitchRad * RecoilRadToDeg
 
+	steamID := shooter.SteamID64
+	state, exists := rc.sprayStates[steamID]
+
 	// If player has no spray state or we need to start a new burst
 	if !exists {
+		burstID := rc.burstIDCounter
+		rc.burstIDCounter++
+
 		rc.sprayStates[steamID] = &sprayState{
-			inBurst:      true,
-			firstTick:    currentTick,
-			firstYaw:     actualYawDeg,   // Store in degrees
-			firstPitch:   actualPitchDeg, // Store in degrees
-			bulletIndex:  1,
-			lastFireTick: currentTick,
-			weapon:       weapon.Type,
+			inBurst:       true,
+			burstID:       burstID,
+			firstTick:     currentTick,
+			firstYawDeg:   actualYawDeg,
+			firstPitchDeg: actualPitchDeg,
+			bulletIndex:   1,
+			lastFireTick:  currentTick,
+			weapon:        weapon.Type,
+			weaponName:    weaponName,
 		}
 
 		// Log first bullet info for debugging
 		if rc.debugMode {
-			playerStats := demoStats.GetOrCreatePlayerStatsBySteamID(steamID)
-			if playerStats != nil {
-				weaponName := getWeaponName(weapon)
-				playerStats.AddMetric(Category("recoil_debug"), Key("weapon_used"), Metric{
-					Type:        MetricString,
-					StringValue: weaponName,
-					Description: "Weapon detected for burst",
-				})
-			}
+			fmt.Printf("[DEBUG] B%02d Player:%d Weapon:%s First bullet angles: Yaw=%.2f° Pitch=%.2f°\n",
+				burstID, steamID, weaponName, actualYawDeg, actualPitchDeg)
 		}
 
 		return // First shot of a burst, no analysis needed
@@ -144,14 +147,18 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 
 				// Skip this bullet if pattern lookup failed
 				if !ok {
+					if rc.debugMode {
+						fmt.Printf("[DEBUG] B%02d Player:%d Weapon:%s Bullet:%d - No spray pattern found\n",
+							state.burstID, steamID, state.weaponName, state.bulletIndex)
+					}
 					state.lastFireTick = currentTick
 					return
 				}
 
 				// Calculate expected aim angles (in degrees)
 				// We subtract offsets because we want to compensate for recoil
-				expectedYawDeg := state.firstYaw - expectedYawOffset
-				expectedPitchDeg := state.firstPitch - expectedPitchOffset
+				expectedYawDeg := state.firstYawDeg - expectedYawOffset
+				expectedPitchDeg := state.firstPitchDeg - expectedPitchOffset
 
 				// Calculate angular error (in degrees)
 				yawDiffDeg := expectedYawDeg - actualYawDeg
@@ -162,25 +169,11 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 				state.sumError += angularErrorDeg
 				state.countedBullets++
 
-				// For debugging - log detailed calculations
-				if rc.debugMode && demoStats != nil && steamID%10 == 1 && state.bulletIndex <= 10 {
-					playerStats := demoStats.GetOrCreatePlayerStatsBySteamID(steamID)
-					if playerStats != nil {
-						debugInfo := fmt.Sprintf("Bullet:%d Yaw(exp/act):%.2f/%.2f Pitch(exp/act):%.2f/%.2f ErrDeg:%.2f",
-							state.bulletIndex,
-							expectedYawDeg,
-							actualYawDeg,
-							expectedPitchDeg,
-							actualPitchDeg,
-							angularErrorDeg)
-
-						key := Key(fmt.Sprintf("debug_bullet_%d", state.bulletIndex))
-						playerStats.AddMetric(Category("recoil_debug"), key, Metric{
-							Type:        MetricString,
-							StringValue: debugInfo,
-							Description: "Debug recoil calculation info",
-						})
-					}
+				// Debug output for every bullet
+				if rc.debugMode {
+					fmt.Printf("[DEBUG] B%02d Player:%d %s Bullet:%d Error:%.2f° Sum:%.2f Count:%d\n",
+						state.burstID, steamID, state.weaponName, state.bulletIndex,
+						angularErrorDeg, state.sumError, state.countedBullets)
 				}
 			}
 
@@ -189,26 +182,37 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 		} else {
 			// Gap too large, end previous burst and start a new one
 			rc.finalizeBurst(state, steamID, demoStats)
+
+			burstID := rc.burstIDCounter
+			rc.burstIDCounter++
+
 			rc.sprayStates[steamID] = &sprayState{
-				inBurst:      true,
-				firstTick:    currentTick,
-				firstYaw:     actualYawDeg,
-				firstPitch:   actualPitchDeg,
-				bulletIndex:  1,
-				lastFireTick: currentTick,
-				weapon:       weapon.Type,
+				inBurst:       true,
+				burstID:       burstID,
+				firstTick:     currentTick,
+				firstYawDeg:   actualYawDeg,
+				firstPitchDeg: actualPitchDeg,
+				bulletIndex:   1,
+				lastFireTick:  currentTick,
+				weapon:        weapon.Type,
+				weaponName:    weaponName,
 			}
 		}
 	} else {
 		// Start a new burst if not in one
+		burstID := rc.burstIDCounter
+		rc.burstIDCounter++
+
 		rc.sprayStates[steamID] = &sprayState{
-			inBurst:      true,
-			firstTick:    currentTick,
-			firstYaw:     actualYawDeg,
-			firstPitch:   actualPitchDeg,
-			bulletIndex:  1,
-			lastFireTick: currentTick,
-			weapon:       weapon.Type,
+			inBurst:       true,
+			burstID:       burstID,
+			firstTick:     currentTick,
+			firstYawDeg:   actualYawDeg,
+			firstPitchDeg: actualPitchDeg,
+			bulletIndex:   1,
+			lastFireTick:  currentTick,
+			weapon:        weapon.Type,
+			weaponName:    weaponName,
 		}
 	}
 }
@@ -217,6 +221,10 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 func (rc *RecoilControlCollector) finalizeBurst(state *sprayState, steamID uint64, demoStats *DemoStats) {
 	// Only process if we have enough bullets for analysis
 	if state.bulletIndex < rc.minBurstSize || state.countedBullets == 0 {
+		if rc.debugMode {
+			fmt.Printf("[DEBUG] B%02d Player:%d %s - Skipped burst: bullets=%d, counted=%d\n",
+				state.burstID, steamID, state.weaponName, state.bulletIndex, state.countedBullets)
+		}
 		return
 	}
 
@@ -225,27 +233,44 @@ func (rc *RecoilControlCollector) finalizeBurst(state *sprayState, steamID uint6
 		return
 	}
 
+	// Calculate mean error for this burst
+	meanError := state.sumError / float64(state.countedBullets)
+
+	if rc.debugMode {
+		fmt.Printf("[DEBUG] B%02d Player:%d %s - Burst finalized: bullets=%d, sum=%.2f°, mean=%.2f°\n",
+			state.burstID, steamID, state.weaponName, state.countedBullets, state.sumError, meanError)
+	}
+
 	// Track total error sum and bullet count for final calculation
 	currentErrorSum := 0.0
+	currentBulletCount := int64(0)
+
 	if metric, found := playerStats.GetMetric(Category("recoil"), Key("total_error_sum")); found {
 		currentErrorSum = metric.FloatValue
 	}
 
+	if metric, found := playerStats.GetMetric(Category("recoil"), Key("total_counted_bullets")); found {
+		currentBulletCount = metric.IntValue
+	}
+
+	// Update total error sum
 	playerStats.AddMetric(Category("recoil"), Key("total_error_sum"), Metric{
 		Type:        MetricFloat,
 		FloatValue:  currentErrorSum + state.sumError,
 		Description: "Total angular error sum in degrees",
 	})
 
-	// Add bullet count
-	for i := 0; i < state.countedBullets; i++ {
-		playerStats.IncrementIntMetric(Category("recoil"), Key("total_counted_bullets"))
-	}
+	// Update total bullet count
+	playerStats.AddMetric(Category("recoil"), Key("total_counted_bullets"), Metric{
+		Type:        MetricInteger,
+		IntValue:    currentBulletCount + int64(state.countedBullets),
+		Description: "Total bullets analyzed for recoil control",
+	})
 
 	// Increment burst count
 	playerStats.IncrementIntMetric(Category("recoil"), Key("burst_count"))
 
-	// Also track weapon-specific metrics for deeper analysis
+	// Also track weapon-specific metrics
 	weaponKey := Key(fmt.Sprintf("%s_bullets", weaponTypeToString(state.weapon)))
 	currentWeaponCount := int64(0)
 	if metric, found := playerStats.GetMetric(Category("recoil"), weaponKey); found {
@@ -255,8 +280,18 @@ func (rc *RecoilControlCollector) finalizeBurst(state *sprayState, steamID uint6
 	playerStats.AddMetric(Category("recoil"), weaponKey, Metric{
 		Type:        MetricInteger,
 		IntValue:    currentWeaponCount + int64(state.countedBullets),
-		Description: fmt.Sprintf("Bullets analyzed for %s", weaponTypeToString(state.weapon)),
+		Description: fmt.Sprintf("Bullets analyzed for %s", state.weaponName),
 	})
+
+	// Add burst-specific mean error for debugging
+	if rc.debugMode {
+		burstKey := Key(fmt.Sprintf("burst_%d_mean_error", state.burstID))
+		playerStats.AddMetric(Category("recoil_debug"), burstKey, Metric{
+			Type:        MetricFloat,
+			FloatValue:  meanError,
+			Description: fmt.Sprintf("Mean error for burst #%d with %s", state.burstID, state.weaponName),
+		})
+	}
 
 	// Reset the spray state
 	state.inBurst = false
@@ -287,25 +322,30 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 	}
 
 	// Calculate final stats for each player
-	for _, playerStats := range demoStats.Players {
+	for steamID, playerStats := range demoStats.Players {
 		totalErrorSum, foundError := playerStats.GetMetric(Category("recoil"), Key("total_error_sum"))
 		totalBullets, foundBullets := playerStats.GetMetric(Category("recoil"), Key("total_counted_bullets"))
 		burstCount, foundBursts := playerStats.GetMetric(Category("recoil"), Key("burst_count"))
 
-		// Skip if insufficient data - set to missing data instead of sentinel -1 value
+		// Skip if insufficient data
 		if !foundError || !foundBullets || !foundBursts ||
 			totalBullets.IntValue < 10 || burstCount.IntValue < 2 {
 
-			// Use a missing value indicator instead of -1
+			if rc.debugMode {
+				fmt.Printf("[DEBUG] Player:%d - Insufficient data: errorFound=%v, bulletsFound=%v, burstsFound=%v, bullets=%d, bursts=%d\n",
+					steamID, foundError, foundBullets, foundBursts,
+					totalBullets.IntValue, burstCount.IntValue)
+			}
+
 			playerStats.AddMetric(Category("recoil"), Key("mean_angular_error"), Metric{
 				Type:        MetricFloat,
-				FloatValue:  0, // Not enough data
+				FloatValue:  0,
 				Description: "Mean angular error in recoil control (degrees) - insufficient data",
 			})
 
 			playerStats.AddMetric(Category("recoil"), Key("recoil_efficiency"), Metric{
 				Type:        MetricPercentage,
-				FloatValue:  0, // Default to 0% for insufficient data
+				FloatValue:  0,
 				Description: "Recoil control efficiency (higher is more suspicious) - insufficient data",
 			})
 
@@ -320,6 +360,11 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 		// Calculate mean angular error across all bursts
 		meanError := totalErrorSum.FloatValue / float64(totalBullets.IntValue)
 
+		if rc.debugMode {
+			fmt.Printf("[DEBUG] Player:%d - Final calculation: bullets=%d, sum=%.2f°, mean=%.2f°\n",
+				steamID, totalBullets.IntValue, totalErrorSum.FloatValue, meanError)
+		}
+
 		// Store mean angular error
 		playerStats.AddMetric(Category("recoil"), Key("mean_angular_error"), Metric{
 			Type:        MetricFloat,
@@ -327,8 +372,8 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 			Description: "Mean angular error in recoil control (degrees)",
 		})
 
-		// Calculate recoil efficiency score using the corrected formula:
-		// 0% at 1.0 degrees or higher, 100% at 0.3 degrees or lower
+		// Calculate recoil efficiency score
+		// 0% at 1.0 degrees or higher, 100% at 0.3 degrees or lower, linear in between
 		recoilEfficiency := 0.0
 		if meanError <= rc.perfectThreshold {
 			recoilEfficiency = 100.0
@@ -346,7 +391,7 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 			Description: "Recoil control efficiency (higher is more suspicious)",
 		})
 
-		// Calculate recoil score for the cheat detector
+		// Calculate recoil score for the cheat detector using the specified formula
 		// 0 at 0.75° or higher, 1 at 0.30° or lower, linear in between
 		recoilScore := clamp01((0.75 - meanError) / 0.45)
 
@@ -550,6 +595,51 @@ func getRecoilOffsets(weaponType common.EquipmentType, bulletIndex int) (float64
 			{1.0, 9.7},  // Bullet 18
 			{2.0, 10.0}, // Bullet 19
 			{2.5, 10.2}, // Bullet 20
+		},
+		// Add patterns for other common weapons
+		common.EqMP9: {
+			{0.0, 0.0},  // Bullet 1
+			{0.0, 0.6},  // Bullet 2
+			{0.0, 1.5},  // Bullet 3
+			{0.2, 2.2},  // Bullet 4
+			{0.5, 3.0},  // Bullet 5
+			{1.0, 3.8},  // Bullet 6
+			{1.5, 4.5},  // Bullet 7
+			{2.0, 5.0},  // Bullet 8
+			{1.5, 5.5},  // Bullet 9
+			{0.5, 6.0},  // Bullet 10
+			{-0.5, 6.3}, // Bullet 11
+			{-1.5, 6.6}, // Bullet 12
+			{-2.0, 6.9}, // Bullet 13
+			{-1.5, 7.2}, // Bullet 14
+			{-0.5, 7.5}, // Bullet 15
+			{0.5, 7.8},  // Bullet 16
+			{1.5, 8.1},  // Bullet 17
+			{2.0, 8.4},  // Bullet 18
+			{1.5, 8.7},  // Bullet 19
+			{0.5, 9.0},  // Bullet 20
+		},
+		common.EqP90: {
+			{0.0, 0.0},  // Bullet 1
+			{0.0, 0.4},  // Bullet 2
+			{0.0, 1.0},  // Bullet 3
+			{0.1, 1.8},  // Bullet 4
+			{0.2, 2.5},  // Bullet 5
+			{0.4, 3.2},  // Bullet 6
+			{0.7, 3.8},  // Bullet 7
+			{1.0, 4.2},  // Bullet 8
+			{1.3, 4.5},  // Bullet 9
+			{1.0, 4.8},  // Bullet 10
+			{0.5, 5.1},  // Bullet 11
+			{0.0, 5.3},  // Bullet 12
+			{-0.5, 5.5}, // Bullet 13
+			{-1.0, 5.7}, // Bullet 14
+			{-1.3, 5.9}, // Bullet 15
+			{-1.0, 6.1}, // Bullet 16
+			{-0.5, 6.3}, // Bullet 17
+			{0.0, 6.5},  // Bullet 18
+			{0.5, 6.7},  // Bullet 19
+			{1.0, 6.9},  // Bullet 20
 		},
 	}
 
