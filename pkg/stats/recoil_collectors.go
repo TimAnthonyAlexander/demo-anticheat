@@ -11,7 +11,7 @@ import (
 
 const (
 	// RadToDeg converts radians to degrees
-	RecoilRadToDeg = 57.2958
+	RecoilRadToDeg = 57.295779513
 )
 
 // RecoilControlCollector tracks recoil control efficiency to detect no-recoil scripts
@@ -31,8 +31,8 @@ type RecoilControlCollector struct {
 type sprayState struct {
 	inBurst        bool
 	firstTick      int
-	firstYaw       float64
-	firstPitch     float64
+	firstYaw       float64 // In degrees, converted from radians
+	firstPitch     float64 // In degrees, converted from radians
 	bulletIndex    int
 	lastFireTick   int
 	weapon         common.EquipmentType
@@ -95,17 +95,39 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 	steamID := shooter.SteamID64
 	state, exists := rc.sprayStates[steamID]
 
+	// Get actual aim angles (in radians from the library)
+	actualYawRad := float64(shooter.ViewDirectionX())
+	actualPitchRad := float64(shooter.ViewDirectionY())
+
+	// Convert to degrees for consistency
+	actualYawDeg := actualYawRad * RecoilRadToDeg
+	actualPitchDeg := actualPitchRad * RecoilRadToDeg
+
 	// If player has no spray state or we need to start a new burst
 	if !exists {
 		rc.sprayStates[steamID] = &sprayState{
 			inBurst:      true,
 			firstTick:    currentTick,
-			firstYaw:     float64(shooter.ViewDirectionX()), // Already in radians
-			firstPitch:   float64(shooter.ViewDirectionY()), // Already in radians
+			firstYaw:     actualYawDeg,   // Store in degrees
+			firstPitch:   actualPitchDeg, // Store in degrees
 			bulletIndex:  1,
 			lastFireTick: currentTick,
 			weapon:       weapon.Type,
 		}
+
+		// Log first bullet info for debugging
+		if rc.debugMode {
+			playerStats := demoStats.GetOrCreatePlayerStatsBySteamID(steamID)
+			if playerStats != nil {
+				weaponName := getWeaponName(weapon)
+				playerStats.AddMetric(Category("recoil_debug"), Key("weapon_used"), Metric{
+					Type:        MetricString,
+					StringValue: weaponName,
+					Description: "Weapon detected for burst",
+				})
+			}
+		}
+
 		return // First shot of a burst, no analysis needed
 	}
 
@@ -118,42 +140,38 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 			// Check if the bullet is in the range we want to analyze (4-30)
 			if state.bulletIndex >= 4 && state.bulletIndex <= rc.maxBulletIdx {
 				// Get the expected recoil offsets for this bullet index (in degrees)
-				expectedYawOffset, expectedPitchOffset := getRecoilOffsets(state.weapon, state.bulletIndex)
+				expectedYawOffset, expectedPitchOffset, ok := getRecoilOffsets(state.weapon, state.bulletIndex)
 
-				// Convert expected offsets to radians since view angles are in radians
-				expectedYawOffsetRad := expectedYawOffset / RecoilRadToDeg
-				expectedPitchOffsetRad := expectedPitchOffset / RecoilRadToDeg
+				// Skip this bullet if pattern lookup failed
+				if !ok {
+					state.lastFireTick = currentTick
+					return
+				}
 
-				// Calculate expected aim angles (initial aim minus the spray pattern offsets)
-				expectedYaw := state.firstYaw - expectedYawOffsetRad
-				expectedPitch := state.firstPitch - expectedPitchOffsetRad
+				// Calculate expected aim angles (in degrees)
+				// We subtract offsets because we want to compensate for recoil
+				expectedYawDeg := state.firstYaw - expectedYawOffset
+				expectedPitchDeg := state.firstPitch - expectedPitchOffset
 
-				// Get actual aim angles at the current tick (also in radians)
-				actualYaw := float64(shooter.ViewDirectionX())
-				actualPitch := float64(shooter.ViewDirectionY())
-
-				// Calculate angular error (in radians)
-				yawDiff := expectedYaw - actualYaw
-				pitchDiff := expectedPitch - actualPitch
-				angularErrorRad := math.Sqrt(yawDiff*yawDiff + pitchDiff*pitchDiff)
-
-				// Convert to degrees for easier understanding
-				angularErrorDeg := angularErrorRad * RecoilRadToDeg
+				// Calculate angular error (in degrees)
+				yawDiffDeg := expectedYawDeg - actualYawDeg
+				pitchDiffDeg := expectedPitchDeg - actualPitchDeg
+				angularErrorDeg := math.Hypot(yawDiffDeg, pitchDiffDeg)
 
 				// Add to player's accumulated error (in degrees)
 				state.sumError += angularErrorDeg
 				state.countedBullets++
 
-				// For debugging - log the first few players we encounter
+				// For debugging - log detailed calculations
 				if rc.debugMode && demoStats != nil && steamID%10 == 1 && state.bulletIndex <= 10 {
 					playerStats := demoStats.GetOrCreatePlayerStatsBySteamID(steamID)
 					if playerStats != nil {
 						debugInfo := fmt.Sprintf("Bullet:%d Yaw(exp/act):%.2f/%.2f Pitch(exp/act):%.2f/%.2f ErrDeg:%.2f",
 							state.bulletIndex,
-							expectedYaw*RecoilRadToDeg,
-							actualYaw*RecoilRadToDeg,
-							expectedPitch*RecoilRadToDeg,
-							actualPitch*RecoilRadToDeg,
+							expectedYawDeg,
+							actualYawDeg,
+							expectedPitchDeg,
+							actualPitchDeg,
 							angularErrorDeg)
 
 						key := Key(fmt.Sprintf("debug_bullet_%d", state.bulletIndex))
@@ -174,8 +192,8 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 			rc.sprayStates[steamID] = &sprayState{
 				inBurst:      true,
 				firstTick:    currentTick,
-				firstYaw:     float64(shooter.ViewDirectionX()),
-				firstPitch:   float64(shooter.ViewDirectionY()),
+				firstYaw:     actualYawDeg,
+				firstPitch:   actualPitchDeg,
 				bulletIndex:  1,
 				lastFireTick: currentTick,
 				weapon:       weapon.Type,
@@ -186,8 +204,8 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 		rc.sprayStates[steamID] = &sprayState{
 			inBurst:      true,
 			firstTick:    currentTick,
-			firstYaw:     float64(shooter.ViewDirectionX()),
-			firstPitch:   float64(shooter.ViewDirectionY()),
+			firstYaw:     actualYawDeg,
+			firstPitch:   actualPitchDeg,
 			bulletIndex:  1,
 			lastFireTick: currentTick,
 			weapon:       weapon.Type,
@@ -274,20 +292,21 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 		totalBullets, foundBullets := playerStats.GetMetric(Category("recoil"), Key("total_counted_bullets"))
 		burstCount, foundBursts := playerStats.GetMetric(Category("recoil"), Key("burst_count"))
 
-		// Skip if insufficient data
+		// Skip if insufficient data - set to missing data instead of sentinel -1 value
 		if !foundError || !foundBullets || !foundBursts ||
 			totalBullets.IntValue < 10 || burstCount.IntValue < 2 {
-			// Add N/A metric for players with insufficient data
+
+			// Use a missing value indicator instead of -1
 			playerStats.AddMetric(Category("recoil"), Key("mean_angular_error"), Metric{
 				Type:        MetricFloat,
-				FloatValue:  -1, // -1 indicates insufficient data
-				Description: "Mean angular error in recoil control (degrees)",
+				FloatValue:  0, // Not enough data
+				Description: "Mean angular error in recoil control (degrees) - insufficient data",
 			})
 
 			playerStats.AddMetric(Category("recoil"), Key("recoil_efficiency"), Metric{
 				Type:        MetricPercentage,
 				FloatValue:  0, // Default to 0% for insufficient data
-				Description: "Recoil control efficiency (higher is more suspicious)",
+				Description: "Recoil control efficiency (higher is more suspicious) - insufficient data",
 			})
 
 			continue
@@ -308,25 +327,33 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 			Description: "Mean angular error in recoil control (degrees)",
 		})
 
-		// Calculate recoil efficiency score using the corrected formula
-		// 0% at 1.0 degrees or higher, 100% at 0.3 degrees or lower, linear in between
+		// Calculate recoil efficiency score using the corrected formula:
+		// 0% at 1.0 degrees or higher, 100% at 0.3 degrees or lower
 		recoilEfficiency := 0.0
 		if meanError <= rc.perfectThreshold {
 			recoilEfficiency = 100.0
 		} else if meanError < 1.0 {
-			// Linear scale from 0 to 100% between perfect (0.3°) and poor (1.0°)
+			// Linear scale from perfect (0.3°) to poor (1.0°)
 			recoilEfficiency = 100.0 * (1.0 - ((meanError - rc.perfectThreshold) / (1.0 - rc.perfectThreshold)))
 		}
 
-		// Ensure we don't have negative efficiency from potential calculation issues
-		if recoilEfficiency < 0.0 {
-			recoilEfficiency = 0.0
-		}
+		// Ensure efficiency is between 0-100%
+		recoilEfficiency = math.Max(0.0, math.Min(100.0, recoilEfficiency))
 
 		playerStats.AddMetric(Category("recoil"), Key("recoil_efficiency"), Metric{
 			Type:        MetricPercentage,
 			FloatValue:  recoilEfficiency,
 			Description: "Recoil control efficiency (higher is more suspicious)",
+		})
+
+		// Calculate recoil score for the cheat detector
+		// 0 at 0.75° or higher, 1 at 0.30° or lower, linear in between
+		recoilScore := clamp01((0.75 - meanError) / 0.45)
+
+		playerStats.AddMetric(Category("recoil"), Key("recoil_score"), Metric{
+			Type:        MetricFloat,
+			FloatValue:  recoilScore,
+			Description: "Recoil score component for cheat detection (0-1)",
 		})
 
 		// Add interpretation
@@ -348,6 +375,22 @@ func interpretation(meanError, perfectThreshold, goodThreshold float64) string {
 		return "Very good recoil control"
 	}
 	return "Normal recoil control"
+}
+
+// getWeaponName returns a readable name for the weapon
+func getWeaponName(weapon *common.Equipment) string {
+	if weapon == nil {
+		return "Unknown"
+	}
+
+	// Get display name from CS2 metadata if available
+	name := weapon.String()
+	if name != "" && name != "Unknown" {
+		return name
+	}
+
+	// Fallback to our own mapping
+	return weaponTypeToString(weapon.Type)
 }
 
 // weaponTypeToString converts weapon types to descriptive names
@@ -390,6 +433,15 @@ func isAutomaticWeapon(weapon *common.Equipment) bool {
 		return false
 	}
 
+	// Check by weapon name first (most reliable in CS2)
+	name := weapon.String()
+	switch name {
+	case "AK-47", "M4A1", "M4A4", "M4A1-S", "FAMAS", "Galil AR",
+		"SG 553", "SG 556", "AUG", "MP9", "MAC-10", "MP7", "P90",
+		"UMP-45", "PP-Bizon", "Negev", "M249":
+		return true
+	}
+
 	// Primary check - look for specific weapons by type
 	switch weapon.Type {
 	case common.EqAK47, common.EqM4A4, common.EqM4A1,
@@ -400,7 +452,7 @@ func isAutomaticWeapon(weapon *common.Equipment) bool {
 		return true
 	}
 
-	// Secondary check - include any rifle or SMG
+	// Secondary check - include any rifle or SMG with multiple bullets
 	weaponClass := weapon.Class()
 	if weaponClass == common.EqClassSMG || weaponClass == common.EqClassRifle {
 		return true
@@ -411,11 +463,8 @@ func isAutomaticWeapon(weapon *common.Equipment) bool {
 
 // getRecoilOffsets returns the expected yaw/pitch offsets for a specific weapon and bullet index
 // These are approximations of the recoil patterns for different weapons
-// Returns values in DEGREES
-func getRecoilOffsets(weaponType common.EquipmentType, bulletIndex int) (float64, float64) {
-	// Simplified recoil patterns (real game has more detailed patterns)
-	// Values are in degrees
-
+// Returns values in DEGREES and a boolean indicating if the lookup succeeded
+func getRecoilOffsets(weaponType common.EquipmentType, bulletIndex int) (float64, float64, bool) {
 	// Clamp bullet index to prevent out-of-bounds access
 	if bulletIndex < 1 {
 		bulletIndex = 1
@@ -516,13 +565,16 @@ func getRecoilOffsets(weaponType common.EquipmentType, bulletIndex int) (float64
 			yawOffset = math.Sin(phase) * float64(bulletIndex) * 0.3
 		}
 		pitchOffset := math.Min(float64(bulletIndex)*0.7, 20.0)
-		return yawOffset, pitchOffset
+		return yawOffset, pitchOffset, true
 	}
 
 	// If we have fewer pattern entries than the bullet index
 	if bulletIndex-1 >= len(pattern) {
-		return pattern[len(pattern)-1][0], pattern[len(pattern)-1][1]
+		if len(pattern) == 0 {
+			return 0, 0, false // Empty pattern, bail out
+		}
+		return pattern[len(pattern)-1][0], pattern[len(pattern)-1][1], true
 	}
 
-	return pattern[bulletIndex-1][0], pattern[bulletIndex-1][1]
+	return pattern[bulletIndex-1][0], pattern[bulletIndex-1][1], true
 }
