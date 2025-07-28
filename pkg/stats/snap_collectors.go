@@ -173,21 +173,28 @@ func (sac *SnapAngleCollector) processKill(e events.Kill, demoStats *DemoStats) 
 		tickDelta = 1.0 // Minimum tick difference to avoid division by zero
 	}
 
-	// Calculate 3D angle difference between start and end vectors
-	yawDiff := float64(angleDiff(startSnapshot.Yaw, endSnapshot.Yaw))
-	pitchDiff := float64(angleDiff(startSnapshot.Pitch, endSnapshot.Pitch))
+	// Exactly as per user's formula:
+	// deltaRad := angleDiff(prevYaw, currYaw)           // already radians
+	// deltaDeg := deltaRad * 57.29577951308232          // rad → deg
+	// deltaMs  := float64(tickCount) * (1000.0 / tickRate)
+	// snapVel  := deltaDeg / deltaMs                    // °/ms
 
-	// Convert the angle difference from radians to degrees
-	angleDeltaRad := math.Sqrt(yawDiff*yawDiff + pitchDiff*pitchDiff)
-	angleDeltaDeg := angleDeltaRad * RadToDeg
+	// Calculate angle difference
+	deltaRad := math.Sqrt(
+		math.Pow(float64(angleDiff(startSnapshot.Yaw, endSnapshot.Yaw)), 2) +
+			math.Pow(float64(angleDiff(startSnapshot.Pitch, endSnapshot.Pitch)), 2),
+	)
 
-	// Convert tick delta to milliseconds
-	timeDeltaMs := (tickDelta / math.Max(1.0, sac.tickRate)) * 1000.0
+	// Convert to degrees
+	deltaDeg := deltaRad * RadToDeg
+
+	// Calculate time delta in milliseconds
+	deltaMs := tickDelta * (1000.0 / math.Max(1.0, sac.tickRate))
 
 	// Calculate velocity in degrees per millisecond
 	var velocity float64
-	if timeDeltaMs > 0 {
-		velocity = angleDeltaDeg / timeDeltaMs
+	if deltaMs > 0 {
+		velocity = deltaDeg / deltaMs
 	} else {
 		velocity = 0
 	}
@@ -328,8 +335,10 @@ func (sac *SnapAngleCollector) CollectFinalStats(demoStats *DemoStats) {
 	}
 }
 
-// Helper function to calculate the smallest angle difference between two angles
+// Helper function to calculate the smallest angle difference between two angles (in radians)
+// This function calculates the smallest angle between two view directions
 func angleDiff(a, b float32) float32 {
+	// Calculate the difference in degrees
 	diff := float32(math.Mod(float64(b-a+180), 360) - 180)
 	if diff < -180 {
 		diff += 360

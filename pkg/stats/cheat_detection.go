@@ -1,8 +1,6 @@
 package stats
 
 import (
-	"math"
-
 	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
 )
 
@@ -60,7 +58,6 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 	hsPercentage := 0.0
 	totalKills := int64(0)
 	p95SnapVelocity := 0.0
-	medianSnapVelocity := 0.0
 	snapCount := int64(0)
 
 	if metric, found := playerStats.GetMetric(Category("kills"), Key("headshot_percentage")); found {
@@ -75,50 +72,32 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		p95SnapVelocity = metric.FloatValue
 	}
 
-	if metric, found := playerStats.GetMetric(Category("aiming"), Key("median_snap_velocity")); found {
-		medianSnapVelocity = metric.FloatValue
-	}
-
 	if metric, found := playerStats.GetMetric(Category("aiming"), Key("snap_count")); found {
 		snapCount = metric.IntValue
 	}
 
-	// === Calculate cheat score using rule-based model ===
-	score := 0.0
+	// === Calculate cheat score using rule-based model (updated parameters) ===
 
 	// Headshot factor - only apply if player has at least 30 kills
-	// HS above 55% adds up to 1.0 to the score
+	// 0 at 55%, 1 at 75%
 	hsScore := 0.0
 	if totalKills >= 30 {
 		hsScore = clamp01((hsPercentage - 55.0) / 20.0)
-		score += 1.0 * hsScore
 	}
 
 	// Snap velocity factor
-	// P95 snap above 3°/ms adds up to 1.0 to the score
+	// 0 at 2°/ms, 1 at 4°/ms (updated thresholds)
 	snapScore := 0.0
-	if snapCount >= 5 {
-		snapScore = clamp01((p95SnapVelocity - 3.0) / 3.0)
-		score += 1.0 * snapScore
-
-		// Also consider consistency - if median is close to p95, it's more suspicious
-		consistencyFactor := medianSnapVelocity / math.Max(0.001, p95SnapVelocity)
-		if consistencyFactor > 0.7 && snapScore > 0.5 {
-			score += 0.2 * consistencyFactor // Add up to 0.2 for high consistency
-		}
+	if snapCount >= 5 { // Need at least a few snaps for reliable data
+		snapScore = clamp01((p95SnapVelocity - 2.0) / 2.0)
 	}
 
-	// Flag player as potential cheater if total score exceeds threshold
-	// According to the guidelines, a score >= 1.2 is considered suspicious
-	// This means the player is red on both metrics or extreme on one
-	cheatLikelihood := 0.0
-	if score >= 1.2 {
-		// Scale to percentage - at 1.2 we're at 60%, anything above 2.0 is 100%
-		cheatLikelihood = math.Min(100.0, (score/2.0)*100.0)
-	} else {
-		// Below the cheating threshold, scale proportionally
-		cheatLikelihood = (score / 1.2) * 60.0
-	}
+	// Calculate combined cheat score (0.6 weight for HS, 0.4 for snap)
+	cheatScore := 0.6*hsScore + 0.4*snapScore
+
+	// Flag as cheater if score >= 0.50 (50%) - updated threshold
+	// Convert to percentage for reporting
+	cheatLikelihood := cheatScore * 100.0
 
 	// === Add explanatory metrics for transparency ===
 	playerStats.AddMetric(Category("anti_cheat"), Key("hs_score"), Metric{
@@ -135,8 +114,8 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 
 	playerStats.AddMetric(Category("anti_cheat"), Key("total_cheat_score"), Metric{
 		Type:        MetricFloat,
-		FloatValue:  score,
-		Description: "Total cheat score before conversion to percentage",
+		FloatValue:  cheatScore,
+		Description: "Total cheat score (0-1, ≥0.50 flags as cheater)",
 	})
 
 	return cheatLikelihood
