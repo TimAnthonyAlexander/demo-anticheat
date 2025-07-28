@@ -23,14 +23,18 @@ type Results struct {
 
 // NewAnalyzer creates a new analyzer for the given demo file
 func NewAnalyzer(demoPath string) *Analyzer {
-	return &Analyzer{
-		demoPath: demoPath,
-		collectors: []stats.Collector{
-			stats.NewWeaponUsageCollector(),
-			stats.NewHeadshotCollector(), // Add the headshot collector
-			stats.NewCheatDetector(),     // Add the cheat detector
-		},
+	analyzer := &Analyzer{
+		demoPath:   demoPath,
+		collectors: []stats.Collector{},
 	}
+
+	// Register default collectors
+	analyzer.RegisterCollector(stats.NewWeaponUsageCollector())
+	analyzer.RegisterCollector(stats.NewHeadshotCollector())
+	analyzer.RegisterCollector(stats.NewSnapAngleCollector())
+	analyzer.RegisterCollector(stats.NewCheatDetector())
+
+	return analyzer
 }
 
 // RegisterCollector adds a new statistics collector to the analyzer
