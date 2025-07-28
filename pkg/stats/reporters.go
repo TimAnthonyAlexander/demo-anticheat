@@ -103,7 +103,20 @@ func (tr *TextReporter) reportCategory(demoStats *DemoStats, category Category, 
 	for _, key := range keySlice {
 		// Only show percentage and other meaningful derived metrics, not raw counts
 		if !strings.HasSuffix(string(key), "_ticks") {
+			// If this is weapons category, ensure we show no_weapon_percentage
+			if category == Category("weapons") && key == Key("no_weapon_percentage") {
+				// Move this to the end
+				continue
+			}
 			displayKeys = append(displayKeys, key)
+		}
+	}
+
+	// For weapons category, add no_weapon_percentage at the end
+	if category == Category("weapons") {
+		noWeaponKey := Key("no_weapon_percentage")
+		if keys[noWeaponKey] {
+			displayKeys = append(displayKeys, noWeaponKey)
 		}
 	}
 
