@@ -28,6 +28,7 @@ func NewAnalyzer(demoPath string) *Analyzer {
 		collectors: []stats.Collector{
 			stats.NewWeaponUsageCollector(),
 			stats.NewHeadshotCollector(), // Add the headshot collector
+			stats.NewCheatDetector(),     // Add the cheat detector
 		},
 	}
 }

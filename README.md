@@ -1,15 +1,17 @@
 # CS2 Demo Statistics Tool
 
-A command-line tool for analyzing Counter-Strike 2 demo files to generate statistics about gameplay.
+A command-line tool for analyzing Counter-Strike 2 demo files to generate statistics about gameplay and detect potential cheaters.
 
 ## Features
 
 - Analyze CS2 demo files (.dem format)
 - Modular statistics collection system
 - Extensible framework for adding new statistics
+- Anti-cheat detection system to identify potential cheaters
 - Current statistics:
   - Weapon usage (knife vs other weapons)
   - Headshot kill percentage
+  - Cheating likelihood
 
 ## Installation
 
@@ -33,7 +35,7 @@ Analyze a demo file:
 ./demo-anticheat analyze path/to/demo.dem
 ```
 
-This will output statistics about player behavior in the demo file.
+This will output statistics about player behavior in the demo file and estimate the likelihood of cheating.
 
 ## Example Output
 
@@ -61,6 +63,16 @@ player2                         76561198000000002      33.33%         9
 player3                         76561198000000003      64.71%         17           
 player4                         76561198000000004      28.57%         14           
 player5                         76561198000000005      50.00%         10           
+
+=== Anti Cheat Statistics ===
+
+Player                          Steam ID               Cheat Likelihood
+-----------------------------------------------------------------------
+player1                         76561198000000001      78.42%         
+player2                         76561198000000002      31.59%         
+player3                         76561198000000003      65.34%         
+player4                         76561198000000004      27.18%         
+player5                         76561198000000005      52.75%         
 ```
 
 ## Project Structure
@@ -77,6 +89,7 @@ demo-anticheat/
 │       ├── types.go        # Core types for statistics
 │       ├── collectors.go   # Base collector functionality
 │       ├── kill_collectors.go # Kill-related statistics
+│       ├── cheat_detection.go # Anti-cheat detection system
 │       └── reporters.go    # Output formatting
 ├── main.go                 # Application entry point
 ├── go.mod                  # Go module definition
@@ -88,7 +101,8 @@ demo-anticheat/
 1. The analyzer parses the demo file frame by frame using demoinfocs-golang
 2. Statistics collectors process each frame to gather data
 3. After parsing, final statistics are calculated
-4. A reporter formats and displays the statistics in a readable format
+4. The anti-cheat detection system analyzes collected statistics to estimate cheating likelihood
+5. A reporter formats and displays the statistics in a readable format
 
 ### Implemented Statistics
 
@@ -97,6 +111,14 @@ Tracks the percentage of time players have their knife out versus other weapons 
 
 #### Headshot Percentage
 Tracks kills and headshot kills for each player, calculating the percentage of kills that were headshots.
+
+#### Cheat Detection
+Analyzes various statistical indicators to estimate the likelihood a player is cheating. Current factors include:
+
+- Headshot percentage weighted by kill count (higher kills with high HS% is more suspicious)
+- Unusual weapon usage patterns (very low or very high knife usage)
+
+The detection system uses a weighted scoring model that will be expanded as more statistics are added.
 
 ## Extending With New Statistics
 

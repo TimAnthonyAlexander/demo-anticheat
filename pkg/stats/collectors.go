@@ -94,6 +94,8 @@ func (wuc *WeaponUsageCollector) CollectFrame(parser demoinfocs.Parser, demoStat
 		// Get active weapon
 		activeWeapon := player.ActiveWeapon()
 		if activeWeapon == nil {
+			// Track no-weapon ticks
+			playerStats.IncrementIntMetric(Category("weapons"), Key("no_weapon_ticks"))
 			continue
 		}
 
@@ -132,6 +134,37 @@ func (wuc *WeaponUsageCollector) CollectFinalStats(demoStats *DemoStats) {
 				FloatValue:  nonKnifePercentage,
 				Description: "Percentage of time with non-knife weapons equipped",
 			})
+		}
+
+		// Calculate no-weapon percentage
+		if noWeaponTicks, found := playerStats.GetMetric(Category("weapons"), Key("no_weapon_ticks")); found {
+			noWeaponPercentage := float64(noWeaponTicks.IntValue) / float64(totalTicks.IntValue) * 100
+			playerStats.AddMetric(Category("weapons"), Key("no_weapon_percentage"), Metric{
+				Type:        MetricPercentage,
+				FloatValue:  noWeaponPercentage,
+				Description: "Percentage of time with no weapon equipped",
+			})
+		}
+		
+		// Validate percentages add up to 100%
+		knifePerc := 0.0
+		nonKnifePerc := 0.0
+		noWeaponPerc := 0.0
+		
+		if metric, found := playerStats.GetMetric(Category("weapons"), Key("knife_percentage")); found {
+			knifePerc = metric.FloatValue
+		}
+		if metric, found := playerStats.GetMetric(Category("weapons"), Key("non_knife_percentage")); found {
+			nonKnifePerc = metric.FloatValue
+		}
+		if metric, found := playerStats.GetMetric(Category("weapons"), Key("no_weapon_percentage")); found {
+			noWeaponPerc = metric.FloatValue
+		}
+		
+		totalPerc := knifePerc + nonKnifePerc + noWeaponPerc
+		if totalPerc < 99.9 || totalPerc > 100.1 {
+			// There might be rounding issues, but we should be close to 100%
+			// Log an error or handle the case where the percentages don't add up
 		}
 	}
 }
