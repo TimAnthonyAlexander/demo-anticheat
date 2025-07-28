@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/timanthonyalexander/demo-anticheat/pkg/analyzer"
-
 	"github.com/spf13/cobra"
+	"github.com/timanthonyalexander/demo-anticheat/pkg/analyzer"
+	"github.com/timanthonyalexander/demo-anticheat/pkg/stats"
 )
 
 // analyzeCmd represents the analyze command
@@ -40,20 +40,14 @@ var analyzeCmd = &cobra.Command{
 			return fmt.Errorf("analysis failed: %v", err)
 		}
 
-		// Display results
-		fmt.Println("Analysis complete!")
-		fmt.Println("\nWeapon Usage Statistics (Knife vs Other Weapons):")
-		fmt.Println("------------------------------------------")
-		fmt.Printf("%-30s %-20s %-12s %-12s\n", "Player", "Steam ID", "Knife %", "Other %")
-		fmt.Println("------------------------------------------")
+		// Create a reporter
+		reporter := stats.NewTextReporter("CS2 Demo Analysis Results")
 
-		for _, playerStats := range results.PlayerStats {
-			fmt.Printf("%-30s %-20d %-12.2f %-12.2f\n",
-				playerStats.PlayerName,
-				playerStats.SteamID64,
-				playerStats.KnifePercent,
-				playerStats.NonKnifePercent,
-			)
+		// Generate the report
+		fmt.Println("Analysis complete!")
+		err = reporter.Report(results.DemoStats, results.Categories, os.Stdout)
+		if err != nil {
+			return fmt.Errorf("error generating report: %v", err)
 		}
 
 		return nil

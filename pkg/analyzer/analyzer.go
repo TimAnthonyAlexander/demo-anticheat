@@ -3,39 +3,37 @@ package analyzer
 import (
 	"fmt"
 	"os"
-	"time"
+	"path/filepath"
 
 	dem "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/common"
+	"github.com/timanthonyalexander/demo-anticheat/pkg/stats"
 )
 
 // Analyzer represents a CS2 demo analyzer
 type Analyzer struct {
-	demoPath string
-}
-
-// PlayerWeaponStats contains statistics about a player's weapon usage
-type PlayerWeaponStats struct {
-	PlayerName      string
-	SteamID64       uint64
-	KnifeTicks      int64
-	NonKnifeTicks   int64
-	TotalTicks      int64
-	KnifePercent    float64
-	NonKnifePercent float64
+	demoPath   string
+	collectors []stats.Collector
 }
 
 // Results represents the analysis results
 type Results struct {
-	PlayerStats map[uint64]*PlayerWeaponStats
-	TickRate    float64
+	DemoStats  *stats.DemoStats
+	Categories []stats.Category
 }
 
 // NewAnalyzer creates a new analyzer for the given demo file
 func NewAnalyzer(demoPath string) *Analyzer {
 	return &Analyzer{
 		demoPath: demoPath,
+		collectors: []stats.Collector{
+			stats.NewWeaponUsageCollector(),
+		},
 	}
+}
+
+// RegisterCollector adds a new statistics collector to the analyzer
+func (a *Analyzer) RegisterCollector(collector stats.Collector) {
+	a.collectors = append(a.collectors, collector)
 }
 
 // Analyze performs the analysis of the demo file
@@ -52,16 +50,24 @@ func (a *Analyzer) Analyze() (Results, error) {
 	defer parser.Close()
 
 	// Parse the header
-	_, err = parser.ParseHeader()
+	header, err := parser.ParseHeader()
 	if err != nil {
 		return Results{}, fmt.Errorf("failed to parse demo header: %w", err)
 	}
 
-	// Get the tick rate
-	tickRate := parser.TickRate()
-	stats := make(map[uint64]*PlayerWeaponStats)
+	// Initialize demo stats
+	demoStats := stats.NewDemoStats()
+	demoStats.TickRate = parser.TickRate()
+	demoStats.DemoName = filepath.Base(a.demoPath)
+	demoStats.MapName = header.MapName
+
+	// Set up collectors
+	for _, collector := range a.collectors {
+		collector.Setup(parser, demoStats)
+	}
 
 	// Parse all frames
+	frameCount := 0
 	for {
 		// Parse the next frame
 		ok, err := parser.ParseNextFrame()
@@ -74,72 +80,37 @@ func (a *Analyzer) Analyze() (Results, error) {
 			break
 		}
 
-		// Get the game state
-		gs := parser.GameState()
-
-		// Analyze all playing participants
-		for _, p := range gs.Participants().Playing() {
-			if p == nil || p.SteamID64 == 0 {
-				continue
-			}
-
-			// Get player's active weapon
-			activeWeapon := p.ActiveWeapon()
-			if activeWeapon == nil {
-				continue
-			}
-
-			// Initialize player stats if not exists
-			if _, ok := stats[p.SteamID64]; !ok {
-				stats[p.SteamID64] = &PlayerWeaponStats{
-					PlayerName: p.Name,
-					SteamID64:  p.SteamID64,
-				}
-			}
-
-			// Update the player's stats
-			stats[p.SteamID64].TotalTicks++
-
-			// Check if weapon is knife by name (most reliable approach)
-			if isKnife(activeWeapon) {
-				stats[p.SteamID64].KnifeTicks++
-			} else {
-				stats[p.SteamID64].NonKnifeTicks++
-			}
+		// Collect stats for this frame
+		for _, collector := range a.collectors {
+			collector.CollectFrame(parser, demoStats)
 		}
+
+		frameCount++
 	}
 
-	// Calculate percentages
-	for _, playerStats := range stats {
-		if playerStats.TotalTicks > 0 {
-			playerStats.KnifePercent = float64(playerStats.KnifeTicks) / float64(playerStats.TotalTicks) * 100
-			playerStats.NonKnifePercent = float64(playerStats.NonKnifeTicks) / float64(playerStats.TotalTicks) * 100
+	// Store total frames parsed
+	demoStats.TickCount = frameCount
+
+	// Calculate final stats
+	for _, collector := range a.collectors {
+		collector.CollectFinalStats(demoStats)
+	}
+
+	// Collect categories from all collectors
+	categories := make([]stats.Category, 0)
+	categoriesSet := make(map[stats.Category]bool)
+
+	for _, collector := range a.collectors {
+		for _, category := range collector.Categories() {
+			if !categoriesSet[category] {
+				categories = append(categories, category)
+				categoriesSet[category] = true
+			}
 		}
 	}
 
 	return Results{
-		PlayerStats: stats,
-		TickRate:    tickRate,
+		DemoStats:  demoStats,
+		Categories: categories,
 	}, nil
-}
-
-// isKnife checks if an equipment is a knife
-func isKnife(weapon *common.Equipment) bool {
-	if weapon == nil {
-		return false
-	}
-
-	// Check if the weapon name contains "knife" or is specific knife type
-	weaponName := weapon.String()
-
-	return weapon.Type == common.EqKnife ||
-		weaponName == "Knife" ||
-		weaponName == "Bayonet" ||
-		weaponName == "Karambit"
-}
-
-// GetTimeFromTicks converts tick count to time.Duration
-func (a *Analyzer) GetTimeFromTicks(ticks int64, tickRate float64) time.Duration {
-	seconds := float64(ticks) / tickRate
-	return time.Duration(seconds * float64(time.Second))
 }

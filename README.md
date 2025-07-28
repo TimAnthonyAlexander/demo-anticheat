@@ -5,7 +5,10 @@ A command-line tool for analyzing Counter-Strike 2 demo files to generate statis
 ## Features
 
 - Analyze CS2 demo files (.dem format)
-- Calculate weapon usage statistics (time spent with knife vs other weapons)
+- Modular statistics collection system
+- Extensible framework for adding new statistics
+- Current statistics:
+  - Weapon usage (knife vs other weapons)
 
 ## Installation
 
@@ -29,47 +32,81 @@ Analyze a demo file:
 ./demo-anticheat analyze path/to/demo.dem
 ```
 
-This will output statistics about how much time each player spent with their knife out versus other weapons.
+This will output statistics about player behavior in the demo file.
 
 ## Example Output
 
 ```
-Analyzing demo file: example.dem
-Analysis in progress...
-Analysis complete!
+CS2 Demo Analysis Results
+Demo: example.dem
+Map: de_dust2
 
-Weapon Usage Statistics (Knife vs Other Weapons):
-------------------------------------------
-Player                         Steam ID             Knife %      Other %     
-------------------------------------------
-player1                        76561198000000001   10.45        89.55       
-player2                        76561198000000002   8.21         91.79       
-player3                        76561198000000003   15.33        84.67       
-player4                        76561198000000004   12.89        87.11       
-player5                        76561198000000005   18.42        81.58       
+=== Weapons Statistics ===
+
+Player                          Steam ID               Knife          Non Knife    
+-----------------------------------------------------------------------
+player1                         76561198000000001      10.45%         89.55%       
+player2                         76561198000000002      8.21%          91.79%       
+player3                         76561198000000003      15.33%         84.67%       
+player4                         76561198000000004      12.89%         87.11%       
+player5                         76561198000000005      18.42%         81.58%       
 ```
 
 ## Project Structure
 
 ```
 demo-anticheat/
-├── cmd/                  # Command-line interface
-│   ├── root.go           # Root command
-│   └── analyze.go        # Analyze command
-├── pkg/                  # Package code
-│   └── analyzer/         # Demo analysis functionality
-│       └── analyzer.go   # Core analysis logic
-├── main.go               # Application entry point
-├── go.mod                # Go module definition
-└── README.md             # This file
+├── cmd/                    # Command-line interface
+│   ├── root.go             # Root command
+│   └── analyze.go          # Analyze command
+├── pkg/                    # Package code
+│   ├── analyzer/           # Demo analysis orchestration
+│   │   └── analyzer.go     # Core analysis logic
+│   └── stats/              # Statistics collection system
+│       ├── types.go        # Core types for statistics
+│       ├── collectors.go   # Statistics collectors
+│       └── reporters.go    # Output formatting
+├── main.go                 # Application entry point
+├── go.mod                  # Go module definition
+└── README.md               # This file
 ```
 
 ## How It Works
 
-1. The tool reads a CS2 demo file and parses it frame by frame
-2. For each frame, it tracks what weapon each player is holding
-3. It counts the number of ticks (frames) that players have their knives out versus other weapons
-4. At the end, it calculates percentages to show how much time was spent with each weapon type
+1. The analyzer parses the demo file frame by frame using demoinfocs-golang
+2. Statistics collectors process each frame to gather data
+3. After parsing, final statistics are calculated
+4. A reporter formats and displays the statistics in a readable format
+
+## Extending With New Statistics
+
+The system is designed to be easily extensible:
+
+1. Create a new collector by implementing the `stats.Collector` interface
+2. Register your collector with the analyzer
+3. Your statistics will be automatically included in the report
+
+Example of implementing a new collector:
+
+```go
+type MyStatsCollector struct {
+    *stats.BaseCollector
+}
+
+func NewMyStatsCollector() *MyStatsCollector {
+    return &MyStatsCollector{
+        BaseCollector: stats.NewBaseCollector("My Stats", stats.Category("my_category")),
+    }
+}
+
+func (c *MyStatsCollector) CollectFrame(parser demoinfocs.Parser, demoStats *stats.DemoStats) {
+    // Your frame-by-frame statistics logic here
+}
+
+func (c *MyStatsCollector) CollectFinalStats(demoStats *stats.DemoStats) {
+    // Calculate final statistics here
+}
+```
 
 ## License
 
