@@ -59,6 +59,8 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 	totalKills := int64(0)
 	p95SnapVelocity := 0.0
 	snapCount := int64(0)
+	p10Reaction := 0.0
+	reactionSamples := int64(0)
 
 	if metric, found := playerStats.GetMetric(Category("kills"), Key("headshot_percentage")); found {
 		hsPercentage = metric.FloatValue
@@ -74,6 +76,14 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 
 	if metric, found := playerStats.GetMetric(Category("aiming"), Key("snap_count")); found {
 		snapCount = metric.IntValue
+	}
+
+	if metric, found := playerStats.GetMetric(Category("reaction"), Key("p10_reaction_time")); found {
+		p10Reaction = metric.FloatValue
+	}
+
+	if metric, found := playerStats.GetMetric(Category("reaction"), Key("reaction_samples")); found {
+		reactionSamples = metric.IntValue
 	}
 
 	// === Calculate cheat score using rule-based model (updated parameters) ===
@@ -92,10 +102,18 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		snapScore = clamp01((p95SnapVelocity - 2.0) / 2.0)
 	}
 
-	// Calculate combined cheat score (0.6 weight for HS, 0.4 for snap)
-	cheatScore := 0.6*hsScore + 0.4*snapScore
+	// Reaction time factor
+	// 0 at 120ms, 1 at 60ms or below
+	rtScore := 0.0
+	if reactionSamples >= 5 { // Need at least a few samples for reliable data
+		rtScore = clamp01((120.0 - p10Reaction) / 60.0)
+	}
 
-	// Flag as cheater if score >= 0.50 (50%) - updated threshold
+	// Calculate combined cheat score with new weighting that includes reaction time
+	// 0.5*hsScore + 0.3*snapScore + 0.2*rtScore
+	cheatScore := 0.5*hsScore + 0.3*snapScore + 0.2*rtScore
+
+	// Flag as cheater if score >= 0.55 (55%) - updated threshold
 	// Convert to percentage for reporting
 	cheatLikelihood := cheatScore * 100.0
 
@@ -112,10 +130,16 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		Description: "Snap velocity-based cheat score component (0-1)",
 	})
 
+	playerStats.AddMetric(Category("anti_cheat"), Key("reaction_score"), Metric{
+		Type:        MetricFloat,
+		FloatValue:  rtScore,
+		Description: "Reaction time-based cheat score component (0-1)",
+	})
+
 	playerStats.AddMetric(Category("anti_cheat"), Key("total_cheat_score"), Metric{
 		Type:        MetricFloat,
 		FloatValue:  cheatScore,
-		Description: "Total cheat score (0-1, ≥0.50 flags as cheater)",
+		Description: "Total cheat score (0-1, ≥0.55 flags as cheater)",
 	})
 
 	return cheatLikelihood
