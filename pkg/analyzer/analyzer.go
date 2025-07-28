@@ -27,6 +27,7 @@ func NewAnalyzer(demoPath string) *Analyzer {
 		demoPath: demoPath,
 		collectors: []stats.Collector{
 			stats.NewWeaponUsageCollector(),
+			stats.NewHeadshotCollector(), // Add the headshot collector
 		},
 	}
 }

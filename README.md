@@ -9,6 +9,7 @@ A command-line tool for analyzing Counter-Strike 2 demo files to generate statis
 - Extensible framework for adding new statistics
 - Current statistics:
   - Weapon usage (knife vs other weapons)
+  - Headshot kill percentage
 
 ## Installation
 
@@ -50,6 +51,16 @@ player2                         76561198000000002      8.21%          91.79%
 player3                         76561198000000003      15.33%         84.67%       
 player4                         76561198000000004      12.89%         87.11%       
 player5                         76561198000000005      18.42%         81.58%       
+
+=== Kills Statistics ===
+
+Player                          Steam ID               Headshot       Total Kills  
+-----------------------------------------------------------------------
+player1                         76561198000000001      75.00%         12           
+player2                         76561198000000002      33.33%         9            
+player3                         76561198000000003      64.71%         17           
+player4                         76561198000000004      28.57%         14           
+player5                         76561198000000005      50.00%         10           
 ```
 
 ## Project Structure
@@ -64,7 +75,8 @@ demo-anticheat/
 │   │   └── analyzer.go     # Core analysis logic
 │   └── stats/              # Statistics collection system
 │       ├── types.go        # Core types for statistics
-│       ├── collectors.go   # Statistics collectors
+│       ├── collectors.go   # Base collector functionality
+│       ├── kill_collectors.go # Kill-related statistics
 │       └── reporters.go    # Output formatting
 ├── main.go                 # Application entry point
 ├── go.mod                  # Go module definition
@@ -77,6 +89,14 @@ demo-anticheat/
 2. Statistics collectors process each frame to gather data
 3. After parsing, final statistics are calculated
 4. A reporter formats and displays the statistics in a readable format
+
+### Implemented Statistics
+
+#### Weapon Usage
+Tracks the percentage of time players have their knife out versus other weapons throughout the demo.
+
+#### Headshot Percentage
+Tracks kills and headshot kills for each player, calculating the percentage of kills that were headshots.
 
 ## Extending With New Statistics
 
