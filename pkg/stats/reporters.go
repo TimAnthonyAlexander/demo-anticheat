@@ -31,35 +31,22 @@ func (tr *TextReporter) Report(demoStats *DemoStats, categories []Category, writ
 	}
 
 	// Print title and demo information
-	_, err := fmt.Fprintln(writer, tr.title)
-	if err != nil {
-		return err
-	}
+	fmt.Fprintln(writer, tr.title)
 
 	if demoStats.DemoName != "" {
-		_, err = fmt.Fprintf(writer, "Demo: %s\n", demoStats.DemoName)
-		if err != nil {
-			return err
-		}
+		fmt.Fprintf(writer, "Demo: %s\n", demoStats.DemoName)
 	}
 
 	if demoStats.MapName != "" {
-		_, err = fmt.Fprintf(writer, "Map: %s\n", demoStats.MapName)
-		if err != nil {
-			return err
-		}
+		fmt.Fprintf(writer, "Map: %s\n", demoStats.MapName)
 	}
 
 	// Process each category
 	for _, category := range categories {
-		err = tr.reportCategory(demoStats, category, writer)
-		if err != nil {
+		if err := tr.reportCategory(demoStats, category, writer); err != nil {
 			return err
 		}
-		_, err = fmt.Fprintln(writer)
-		if err != nil {
-			return err
-		}
+		fmt.Fprintln(writer)
 	}
 
 	return nil
@@ -67,6 +54,39 @@ func (tr *TextReporter) Report(demoStats *DemoStats, categories []Category, writ
 
 // reportCategory reports statistics for a specific category
 func (tr *TextReporter) reportCategory(demoStats *DemoStats, category Category, writer io.Writer) error {
+	// Get all metrics to display for this category
+	displayKeys, hasData := tr.getDisplayKeys(demoStats, category)
+	if !hasData {
+		return nil
+	}
+
+	// Print category header
+	fmt.Fprintf(writer, "\n=== %s Statistics ===\n\n", strings.Title(string(category)))
+
+	// Get sorted players
+	players := tr.getSortedPlayers(demoStats, category)
+
+	// Column widths for formatting
+	const (
+		playerWidth  = 20
+		steamIDWidth = 20
+		valueWidth   = 12
+		cheaterWidth = 7
+	)
+
+	// Print table header
+	tr.printTableHeader(writer, category, displayKeys, playerWidth, steamIDWidth, valueWidth, cheaterWidth)
+
+	// Print table rows
+	for _, playerStats := range players {
+		tr.printPlayerRow(writer, playerStats, category, displayKeys, playerWidth, steamIDWidth, valueWidth, cheaterWidth)
+	}
+
+	return nil
+}
+
+// getDisplayKeys returns the keys to display for a category and whether there's data to show
+func (tr *TextReporter) getDisplayKeys(demoStats *DemoStats, category Category) ([]Key, bool) {
 	// Get all stats keys for this category
 	keys := make(map[Key]bool)
 	for _, playerStats := range demoStats.Players {
@@ -79,13 +99,7 @@ func (tr *TextReporter) reportCategory(demoStats *DemoStats, category Category, 
 
 	// If no keys, this category has no data
 	if len(keys) == 0 {
-		return nil
-	}
-
-	// Title for the category
-	_, err := fmt.Fprintf(writer, "\n=== %s Statistics ===\n\n", strings.Title(string(category)))
-	if err != nil {
-		return err
+		return nil, false
 	}
 
 	// Convert keys to slice for sorting
@@ -120,10 +134,14 @@ func (tr *TextReporter) reportCategory(demoStats *DemoStats, category Category, 
 	}
 
 	if len(displayKeys) == 0 {
-		return nil
+		return nil, false
 	}
 
-	// Get players
+	return displayKeys, true
+}
+
+// getSortedPlayers returns players sorted appropriately for the category
+func (tr *TextReporter) getSortedPlayers(demoStats *DemoStats, category Category) []*PlayerStats {
 	players := make([]*PlayerStats, 0, len(demoStats.Players))
 	for _, playerStats := range demoStats.Players {
 		players = append(players, playerStats)
@@ -133,18 +151,9 @@ func (tr *TextReporter) reportCategory(demoStats *DemoStats, category Category, 
 	if category == Category("anti_cheat") {
 		// For anti-cheat category, sort by cheating likelihood (highest first)
 		sort.Slice(players, func(i, j int) bool {
-			iLikelihood := float64(0)
-			jLikelihood := float64(0)
-
-			if metric, found := players[i].GetMetric(category, Key("cheat_likelihood")); found {
-				iLikelihood = metric.FloatValue
-			}
-
-			if metric, found := players[j].GetMetric(category, Key("cheat_likelihood")); found {
-				jLikelihood = metric.FloatValue
-			}
-
-			return iLikelihood > jLikelihood
+			iVal := getMetricFloatValue(players[i], category, Key("cheat_likelihood"))
+			jVal := getMetricFloatValue(players[j], category, Key("cheat_likelihood"))
+			return iVal > jVal
 		})
 	} else {
 		// For other categories, sort by name
@@ -153,11 +162,11 @@ func (tr *TextReporter) reportCategory(demoStats *DemoStats, category Category, 
 		})
 	}
 
-	// Create fixed width table instead of tabwriter
-	playerWidth := 20
-	steamIDWidth := 20
-	valueWidth := 12
+	return players
+}
 
+// printTableHeader prints the header row for a table
+func (tr *TextReporter) printTableHeader(writer io.Writer, category Category, displayKeys []Key, playerWidth, steamIDWidth, valueWidth, cheaterWidth int) {
 	// Print header
 	fmt.Fprintf(writer, "%-*s  %-*s  ", playerWidth, "Player", steamIDWidth, "Steam ID")
 
@@ -167,7 +176,7 @@ func (tr *TextReporter) reportCategory(demoStats *DemoStats, category Category, 
 
 	// For anti-cheat, add a "Cheater" column
 	if category == Category("anti_cheat") {
-		fmt.Fprintf(writer, "%-*s", 7, "Cheater")
+		fmt.Fprintf(writer, "%-*s", cheaterWidth, "Cheater")
 	}
 
 	fmt.Fprintln(writer)
@@ -175,43 +184,43 @@ func (tr *TextReporter) reportCategory(demoStats *DemoStats, category Category, 
 	// Print separator
 	headerLength := playerWidth + steamIDWidth + (valueWidth * len(displayKeys)) + (len(displayKeys) * 2) + 4
 	if category == Category("anti_cheat") {
-		headerLength += 9 // Extra for the "Cheater" column
+		headerLength += cheaterWidth + 2 // Extra for the "Cheater" column
 	}
 	fmt.Fprintln(writer, strings.Repeat("-", headerLength))
+}
 
-	// Print each player's stats
-	for _, playerStats := range players {
-		fmt.Fprintf(writer, "%-*s  %-*d  ", playerWidth, playerStats.Player.Name, steamIDWidth, playerStats.Player.SteamID64)
+// printPlayerRow prints a row for a player in a table
+func (tr *TextReporter) printPlayerRow(writer io.Writer, playerStats *PlayerStats, category Category, displayKeys []Key, playerWidth, steamIDWidth, valueWidth, cheaterWidth int) {
+	// Print player name and ID
+	fmt.Fprintf(writer, "%-*s  %-*d  ", playerWidth, playerStats.Player.Name, steamIDWidth, playerStats.Player.SteamID64)
 
-		// Used to track cheat likelihood for the "Cheater" column
-		cheatLikelihood := float64(0)
+	// Used to track cheat likelihood for the "Cheater" column
+	cheatLikelihood := 0.0
 
-		for _, key := range displayKeys {
-			if metric, found := playerStats.GetMetric(category, key); found {
-				fmt.Fprintf(writer, "%-*s  ", valueWidth, formatMetricValue(metric))
+	// Print each metric value
+	for _, key := range displayKeys {
+		if metric, found := playerStats.GetMetric(category, key); found {
+			fmt.Fprintf(writer, "%-*s  ", valueWidth, formatMetricValue(metric))
 
-				// Store cheat likelihood for later
-				if category == Category("anti_cheat") && key == Key("cheat_likelihood") {
-					cheatLikelihood = metric.FloatValue
-				}
-			} else {
-				fmt.Fprintf(writer, "%-*s  ", valueWidth, "-")
+			// Store cheat likelihood for later
+			if category == Category("anti_cheat") && key == Key("cheat_likelihood") {
+				cheatLikelihood = metric.FloatValue
 			}
+		} else {
+			fmt.Fprintf(writer, "%-*s  ", valueWidth, "-")
 		}
-
-		// Add "Yes/No" column for anti-cheat category
-		if category == Category("anti_cheat") {
-			if cheatLikelihood >= 90.0 {
-				fmt.Fprintf(writer, "%-7s", "Yes")
-			} else {
-				fmt.Fprintf(writer, "%-7s", "No")
-			}
-		}
-
-		fmt.Fprintln(writer)
 	}
 
-	return nil
+	// Add "Yes/No" column for anti-cheat category
+	if category == Category("anti_cheat") {
+		if cheatLikelihood >= 90.0 {
+			fmt.Fprintf(writer, "%-*s", cheaterWidth, "Yes")
+		} else {
+			fmt.Fprintf(writer, "%-*s", cheaterWidth, "No")
+		}
+	}
+
+	fmt.Fprintln(writer)
 }
 
 // formatColumnTitle formats a key into a column title
@@ -240,4 +249,12 @@ func formatMetricValue(metric Metric) string {
 	default:
 		return "-"
 	}
+}
+
+// getMetricFloatValue is a helper to safely get a float value from a metric
+func getMetricFloatValue(playerStats *PlayerStats, category Category, key Key) float64 {
+	if metric, found := playerStats.GetMetric(category, key); found {
+		return metric.FloatValue
+	}
+	return 0.0
 }
