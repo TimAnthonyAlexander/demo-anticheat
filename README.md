@@ -76,16 +76,17 @@ Register your collector with the analyzer so it’s included in every run.
 ⸻
 
 ### Statistics Included
-	•	Weapon Usage:
-Time spent with knife, non-knife, and no weapon.
-	•	Headshot Percentage:
-Per-player, with minimum kill filter.
-	•	Snap Angle Velocity:
-Measures speed of aim adjustments prior to a kill. Bots snap far faster than humanly possible.
-	•	Reaction Time:
-Time (ms) between enemy entering FOV and player’s shot. Flags superhuman trigger-bots.
-	•	Composite Cheat Detection:
-Weighted, explainable flagging based on headshot %, snap speed, and reaction time.
+
+- Weapon Usage:
+    - Time spent with knife, non-knife, and no weapon.
+- Headshot Percentage:
+    - Per-player, with minimum kill filter.
+- Snap Angle Velocity:
+    - Measures speed of aim adjustments prior to a kill. Bots snap far faster than humanly possible.
+- Reaction Time:
+    - Time (ms) between enemy entering FOV and player’s shot. Flags superhuman trigger-bots.
+- Composite Cheat Detection:
+    - Weighted, explainable flagging based on headshot %, snap speed, and reaction time.
 
 ⸻
 
