@@ -34,7 +34,8 @@ func NewAnalyzer(demoPath string) *Analyzer {
 	analyzer.RegisterCollector(stats.NewSnapAngleCollector())
 	analyzer.RegisterCollector(stats.NewReactionTimeCollector())
 	analyzer.RegisterCollector(stats.NewRecoilControlCollector()) // Add the new recoil control collector
-	analyzer.RegisterCollector(stats.NewCheatDetector())
+	analyzer.RegisterCollector(stats.NewGameModeCollector())      // Add the game mode collector
+	analyzer.RegisterCollector(stats.NewCheatDetector())          // CheatDetector should be last to use results from other collectors
 
 	return analyzer
 }

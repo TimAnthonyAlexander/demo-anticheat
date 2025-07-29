@@ -128,6 +128,49 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 	// Convert to percentage for reporting
 	cheatLikelihood := cheatScore * 100.0
 
+	// Apply additional rules based on game mode and kill count
+	gameMode := "Competitive" // Default assumption
+	roundCount := int64(30)   // Default assumption of regulation time (30 rounds)
+
+	// Get game mode information
+	if metric, found := playerStats.GetMetric(Category("game_info"), Key("game_mode")); found {
+		gameMode = metric.StringValue
+	}
+
+	// Get round count information
+	if metric, found := playerStats.GetMetric(Category("game_info"), Key("round_count")); found {
+		roundCount = metric.IntValue
+	}
+
+	// Apply Wingman rule: For players with > 15 kills, increase likelihood by 20%
+	if gameMode == "Wingman" && totalKills > 15 {
+		cheatLikelihood = cheatLikelihood * 1.2
+
+		// Add explanation
+		playerStats.AddMetric(Category("anti_cheat"), Key("wingman_boost"), Metric{
+			Type:        MetricString,
+			StringValue: "Yes",
+			Description: "Player has more than 15 kills in Wingman (20% boost applied)",
+		})
+	}
+
+	// Apply Competitive rule: For players with > 39 kills in regulation (≤30 rounds), increase likelihood by 20%
+	if gameMode == "Competitive" && totalKills > 39 && roundCount <= 30 {
+		cheatLikelihood = cheatLikelihood * 1.2
+
+		// Add explanation
+		playerStats.AddMetric(Category("anti_cheat"), Key("competitive_boost"), Metric{
+			Type:        MetricString,
+			StringValue: "Yes",
+			Description: "Player has more than 39 kills in regulation time (20% boost applied)",
+		})
+	}
+
+	// Make sure we don't exceed 100%
+	if cheatLikelihood > 100.0 {
+		cheatLikelihood = 100.0
+	}
+
 	// === Add explanatory metrics for transparency ===
 	playerStats.AddMetric(Category("anti_cheat"), Key("hs_score"), Metric{
 		Type:        MetricFloat,
@@ -160,7 +203,7 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 	})
 
 	// Mark as cheater if score exceeds threshold
-	if cheatScore >= 0.55 {
+	if cheatLikelihood >= 55.0 {
 		playerStats.AddMetric(Category("anti_cheat"), Key("cheater"), Metric{
 			Type:        MetricString,
 			StringValue: "Yes",
