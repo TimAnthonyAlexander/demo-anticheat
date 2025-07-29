@@ -77,16 +77,43 @@ Register your collector with the analyzer so it’s included in every run.
 
 ### Statistics Included
 
-- Weapon Usage:
-    - Time spent with knife, non-knife, and no weapon.
-- Headshot Percentage:
-    - Per-player, with minimum kill filter.
-- Snap Angle Velocity:
-    - Measures speed of aim adjustments prior to a kill. Bots snap far faster than humanly possible.
-- Reaction Time:
-    - Time (ms) between enemy entering FOV and player’s shot. Flags superhuman trigger-bots.
-- Composite Cheat Detection:
-    - Weighted, explainable flagging based on headshot %, snap speed, and reaction time.
+- **Weapon Usage Analysis**
+    - Real-time tracking of equipment choices (knife, primary, secondary weapons)
+    - Percentage breakdowns of combat vs. utility time
+    - Weapon preference patterns that may indicate script assistance
+
+- **Headshot Analytics**
+    - Per-player headshot percentage with statistical significance guards
+    - Headshot consistency across weapon types and engagement distances
+    - Anomaly detection for headshot rates exceeding statistical norms
+
+- **Precision Aim Detection**
+    - Snap-angle velocity measurements (degrees per millisecond)
+    - P95/median/average aim adjustment speed analysis
+    - Sub-2° micro-adjustments tracking that identifies aim assistance
+
+- **Reaction Time Analysis**
+    - Human-impossible reaction windows flagging (sub-100ms response rates)
+    - 10th percentile and median reaction time calculations
+    - Visual contact to shot timing measurements across engagement types
+
+- **Recoil Control Patterns**
+    - Spray pattern deviation analysis against known weapon recoil
+    - Inhuman consistency detection in automatic weapon control
+    - Angular error measurements detecting script-assisted compensation
+
+- **Game Context Intelligence**
+    - Automatic game mode detection (Competitive, Wingman)
+    - Round tracking and performance normalization
+    - Special high-performance analysis for statistical outliers
+
+- **Composite Cheat Detection**
+    - Multi-factor weighted scoring system with transparent explanation
+    - Customizable sensitivity with confidence thresholds
+    - Performance-adjusted scoring that accounts for game context
+    - Special flagging for exceptional performances (39+ kills in regulation, 15+ in Wingman)
+
+Each metric is individually tracked, statistically validated, and contributes to an overall cheat likelihood score that provides clear justification for every verdict.
 
 ⸻
 

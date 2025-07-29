@@ -203,7 +203,7 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 	})
 
 	// Mark as cheater if score exceeds threshold
-	if cheatLikelihood >= 55.0 {
+	if cheatLikelihood >= 80.0 {
 		playerStats.AddMetric(Category("anti_cheat"), Key("cheater"), Metric{
 			Type:        MetricString,
 			StringValue: "Yes",
