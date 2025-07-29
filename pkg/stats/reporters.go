@@ -213,7 +213,7 @@ func (tr *TextReporter) printPlayerRow(writer io.Writer, playerStats *PlayerStat
 
 	// Add "Yes/No" column for anti-cheat category
 	if category == Category("anti_cheat") {
-		if cheatLikelihood >= 90.0 {
+		if cheatLikelihood >= 80.0 {
 			fmt.Fprintf(writer, "%-*s", cheaterWidth, "Yes")
 		} else {
 			fmt.Fprintf(writer, "%-*s", cheaterWidth, "No")
