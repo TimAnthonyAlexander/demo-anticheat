@@ -17,6 +17,7 @@ _A fast, extensible CLI tool for statistically analyzing Counter-Strike 2 demos 
 - **Composite cheat-likelihood score** with clear justification for every flag
 - **CLI interface, rapid bulk processing, and machine-readable output possible**
 - **Modular, extensible architecture** – add your own metrics with minimal code
+- **Support for CS2 share codes** – analyze demos directly from share codes
 
 ---
 
@@ -34,9 +35,43 @@ go build
 
 ### Analyze a Demo
 
+#### Using a local demo file:
+
 ```sh
 ./demo-anticheat analyze path/to/demo.dem
 ```
+
+#### Using a CS2 share code:
+
+```sh
+./demo-anticheat analyze CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
+```
+
+When using a share code, the tool will:
+1. Download the demo from Valve's servers
+2. Decompress the .bz2 file
+3. Analyze the demo automatically
+4. Delete the downloaded file after analysis (unless the `--keep` flag is used)
+
+Additional share code options:
+```sh
+# Save downloaded demos to a specific directory
+./demo-anticheat analyze --output-dir ~/cs2-demos CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
+
+# Keep the downloaded demo file after analysis
+./demo-anticheat analyze --keep CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
+```
+
+#### Get info about a CS2 share code:
+```sh
+./demo-anticheat sharecode CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
+```
+
+This will display information about the share code including:
+- Match ID
+- Outcome ID
+- Download URL
+- And other metadata
 
 The tool will process the demo and print a multi-part report showing weapon, aim, reaction, and cheat-likelihood statistics for every player.
 
