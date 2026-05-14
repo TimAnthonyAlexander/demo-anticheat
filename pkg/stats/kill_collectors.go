@@ -1,8 +1,8 @@
 package stats
 
 import (
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/events"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/events"
 )
 
 // HeadshotCollector tracks headshot kill statistics
