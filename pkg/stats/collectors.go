@@ -1,8 +1,8 @@
 package stats
 
 import (
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
 )
 
 // Collector is the interface for all statistics collectors
@@ -145,12 +145,12 @@ func (wuc *WeaponUsageCollector) CollectFinalStats(demoStats *DemoStats) {
 				Description: "Percentage of time with no weapon equipped",
 			})
 		}
-		
+
 		// Validate percentages add up to 100%
 		knifePerc := 0.0
 		nonKnifePerc := 0.0
 		noWeaponPerc := 0.0
-		
+
 		if metric, found := playerStats.GetMetric(Category("weapons"), Key("knife_percentage")); found {
 			knifePerc = metric.FloatValue
 		}
@@ -160,7 +160,7 @@ func (wuc *WeaponUsageCollector) CollectFinalStats(demoStats *DemoStats) {
 		if metric, found := playerStats.GetMetric(Category("weapons"), Key("no_weapon_percentage")); found {
 			noWeaponPerc = metric.FloatValue
 		}
-		
+
 		totalPerc := knifePerc + nonKnifePerc + noWeaponPerc
 		if totalPerc < 99.9 || totalPerc > 100.1 {
 			// There might be rounding issues, but we should be close to 100%

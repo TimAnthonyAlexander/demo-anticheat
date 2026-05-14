@@ -1,7 +1,7 @@
 package stats
 
 import (
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
 )
 
 // CheatDetector evaluates statistics to determine likelihood of cheating

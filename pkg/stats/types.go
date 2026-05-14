@@ -3,7 +3,7 @@ package stats
 import (
 	"time"
 
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
 )
 
 // PlayerIdentifier contains information to identify a player

@@ -5,7 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	dem "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
+	dem "github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
+
 	"github.com/timanthonyalexander/demo-anticheat/pkg/stats"
 )
 
@@ -59,7 +60,7 @@ func (a *Analyzer) Analyze() (Results, error) {
 	defer parser.Close()
 
 	// Parse the header
-	header, err := parser.ParseHeader()
+	_, err = parser.ParseNextFrame()
 	if err != nil {
 		return Results{}, fmt.Errorf("failed to parse demo header: %w", err)
 	}
@@ -68,7 +69,7 @@ func (a *Analyzer) Analyze() (Results, error) {
 	demoStats := stats.NewDemoStats()
 	demoStats.TickRate = parser.TickRate()
 	demoStats.DemoName = filepath.Base(a.demoPath)
-	demoStats.MapName = header.MapName
+	// demoStats.MapName = header.MapName
 
 	// Set up collectors
 	for _, collector := range a.collectors {
