@@ -4,9 +4,9 @@ import (
 	"math"
 	"sort"
 
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/common"
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/events"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/events"
 )
 
 const (
@@ -96,18 +96,21 @@ func NewSnapAngleCollector() *SnapAngleCollector {
 
 // Setup initializes the collector with the demo parser
 func (sac *SnapAngleCollector) Setup(parser demoinfocs.Parser, demoStats *DemoStats) {
+	// In v5 parser.TickRate() returns -1 before CSVCMsg_ServerInfo arrives, so
+	// seed with the CS2 default and refresh from TickRateInfoAvailable.
 	sac.tickRate = parser.TickRate()
-	if sac.tickRate == 0 {
-		sac.tickRate = 64.0 // Default tick rate for CS2 if we can't get it from the parser
+	if sac.tickRate <= 0 {
+		sac.tickRate = 64.0
 	}
+	parser.RegisterEventHandler(func(e events.TickRateInfoAvailable) {
+		if e.TickRate > 0 {
+			sac.tickRate = e.TickRate
+		}
+	})
 
 	// Register kill event handler
 	parser.RegisterEventHandler(func(e events.Kill) {
 		sac.processKill(e, demoStats)
-	})
-
-	// Register a debug handler for tick done events
-	parser.RegisterEventHandler(func(e events.DataTablesParsed) {
 	})
 }
 

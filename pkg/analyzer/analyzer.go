@@ -5,7 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	dem "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
+	dem "github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/msg"
 	"github.com/timanthonyalexander/demo-anticheat/pkg/stats"
 )
 
@@ -58,17 +59,14 @@ func (a *Analyzer) Analyze() (Results, error) {
 	parser := dem.NewParser(f)
 	defer parser.Close()
 
-	// Parse the header
-	header, err := parser.ParseHeader()
-	if err != nil {
-		return Results{}, fmt.Errorf("failed to parse demo header: %w", err)
-	}
-
 	// Initialize demo stats
 	demoStats := stats.NewDemoStats()
-	demoStats.TickRate = parser.TickRate()
 	demoStats.DemoName = filepath.Base(a.demoPath)
-	demoStats.MapName = header.MapName
+
+	// v5 removed ParseHeader(); subscribe to the demo file header net message instead.
+	parser.RegisterNetMessageHandler(func(m *msg.CDemoFileHeader) {
+		demoStats.MapName = m.GetMapName()
+	})
 
 	// Set up collectors
 	for _, collector := range a.collectors {
@@ -99,6 +97,7 @@ func (a *Analyzer) Analyze() (Results, error) {
 
 	// Store total frames parsed
 	demoStats.TickCount = frameCount
+	demoStats.TickRate = parser.TickRate()
 
 	// Calculate final stats
 	for _, collector := range a.collectors {

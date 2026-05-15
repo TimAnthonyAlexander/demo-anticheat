@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/common"
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/events"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/events"
 )
 
 const (
@@ -196,7 +196,17 @@ func NewRecoilControlCollector() *RecoilControlCollector {
 
 // Setup registers event handlers for weapon fire events
 func (rc *RecoilControlCollector) Setup(parser demoinfocs.Parser, demoStats *DemoStats) {
+	// In v5 parser.TickRate() returns -1 before CSVCMsg_ServerInfo arrives, so
+	// seed with the CS2 default and refresh from TickRateInfoAvailable.
 	rc.tickRate = parser.TickRate()
+	if rc.tickRate <= 0 {
+		rc.tickRate = 64.0
+	}
+	parser.RegisterEventHandler(func(e events.TickRateInfoAvailable) {
+		if e.TickRate > 0 {
+			rc.tickRate = e.TickRate
+		}
+	})
 
 	// Register weapon fire event handler
 	parser.RegisterEventHandler(func(e events.WeaponFire) {

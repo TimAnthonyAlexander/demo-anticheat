@@ -4,9 +4,9 @@ import (
 	"math"
 	"sort"
 
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/common"
-	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/events"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/events"
 )
 
 // Constants for reaction time calculations
@@ -43,10 +43,17 @@ func NewReactionTimeCollector() *ReactionTimeCollector {
 
 // Setup initializes the collector with the demo parser
 func (rtc *ReactionTimeCollector) Setup(parser demoinfocs.Parser, demoStats *DemoStats) {
+	// In v5 parser.TickRate() returns -1 before CSVCMsg_ServerInfo arrives, so
+	// seed with the CS2 default and refresh from TickRateInfoAvailable.
 	rtc.tickRate = parser.TickRate()
-	if rtc.tickRate == 0 {
-		rtc.tickRate = 64.0 // Default tick rate for CS2 if we can't get it from the parser
+	if rtc.tickRate <= 0 {
+		rtc.tickRate = 64.0
 	}
+	parser.RegisterEventHandler(func(e events.TickRateInfoAvailable) {
+		if e.TickRate > 0 {
+			rtc.tickRate = e.TickRate
+		}
+	})
 
 	// Register weapon fire event handler
 	parser.RegisterEventHandler(func(e events.WeaponFire) {
