@@ -631,7 +631,8 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 			}
 		}
 	}
-	fmt.Println("=== End of DEBUG Recoil Metrics ===\n")
+	fmt.Println("=== End of DEBUG Recoil Metrics ===")
+	fmt.Println()
 }
 
 // interpretation returns an interpretation of the recoil control based on mean error

@@ -46,8 +46,14 @@ func (gmc *GameModeCollector) CollectFinalStats(demoStats *DemoStats) {
 	globalStats := demoStats.GetOrCreatePlayerStatsBySteamID(0)
 	globalStats.AddMetric(Category("game_info"), Key("round_count"), gameInfoMetric)
 
-	// Determine game mode based on player count
-	playerCount := len(demoStats.Players)
+	// Determine game mode based on real player count (exclude the sid=0
+	// "Unknown" placeholder used by some collectors for demo-wide metrics).
+	playerCount := 0
+	for sid := range demoStats.Players {
+		if sid != 0 {
+			playerCount++
+		}
+	}
 
 	// Game mode detection is approximate:
 	// - Wingman typically has 4 or fewer players

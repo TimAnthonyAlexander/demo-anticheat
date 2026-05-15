@@ -115,14 +115,20 @@ func (tr *TextReporter) getDisplayKeys(demoStats *DemoStats, category Category) 
 	displayKeys := make([]Key, 0)
 	for _, key := range keySlice {
 		// Only show percentage and other meaningful derived metrics, not raw counts
-		if !strings.HasSuffix(string(key), "_ticks") {
-			// If this is weapons category, ensure we show no_weapon_percentage
-			if category == Category("weapons") && key == Key("no_weapon_percentage") {
-				// Move this to the end
-				continue
-			}
-			displayKeys = append(displayKeys, key)
+		if strings.HasSuffix(string(key), "_ticks") {
+			continue
 		}
+		// Anti-cheat appends its own "Cheater" column from the cheater metric;
+		// don't duplicate it as a regular column too.
+		if category == Category("anti_cheat") && key == Key("cheater") {
+			continue
+		}
+		// If this is weapons category, ensure we show no_weapon_percentage
+		if category == Category("weapons") && key == Key("no_weapon_percentage") {
+			// Move this to the end
+			continue
+		}
+		displayKeys = append(displayKeys, key)
 	}
 
 	// For weapons category, add no_weapon_percentage at the end
@@ -194,30 +200,24 @@ func (tr *TextReporter) printPlayerRow(writer io.Writer, playerStats *PlayerStat
 	// Print player name and ID
 	fmt.Fprintf(writer, "%-*s  %-*d  ", playerWidth, playerStats.Player.Name, steamIDWidth, playerStats.Player.SteamID64)
 
-	// Used to track cheat likelihood for the "Cheater" column
-	cheatLikelihood := 0.0
-
 	// Print each metric value
 	for _, key := range displayKeys {
 		if metric, found := playerStats.GetMetric(category, key); found {
 			fmt.Fprintf(writer, "%-*s  ", valueWidth, formatMetricValue(metric))
-
-			// Store cheat likelihood for later
-			if category == Category("anti_cheat") && key == Key("cheat_likelihood") {
-				cheatLikelihood = metric.FloatValue
-			}
 		} else {
 			fmt.Fprintf(writer, "%-*s  ", valueWidth, "-")
 		}
 	}
 
-	// Add "Yes/No" column for anti-cheat category
+	// Add "Yes/No" column for anti-cheat category, sourced from the
+	// "cheater" metric the detector already published — keeps the flag
+	// threshold defined in exactly one place (cheat_detection.go).
 	if category == Category("anti_cheat") {
-		if cheatLikelihood >= 80.0 {
-			fmt.Fprintf(writer, "%-*s", cheaterWidth, "Yes")
-		} else {
-			fmt.Fprintf(writer, "%-*s", cheaterWidth, "No")
+		flag := "No"
+		if metric, found := playerStats.GetMetric(category, Key("cheater")); found && metric.StringValue == "Yes" {
+			flag = "Yes"
 		}
+		fmt.Fprintf(writer, "%-*s", cheaterWidth, flag)
 	}
 
 	fmt.Fprintln(writer)
@@ -246,6 +246,11 @@ func formatMetricValue(metric Metric) string {
 		return fmt.Sprintf("%d", metric.IntValue)
 	case MetricDuration:
 		return metric.DurationValue.String()
+	case MetricString:
+		if metric.StringValue == "" {
+			return "-"
+		}
+		return metric.StringValue
 	default:
 		return "-"
 	}
