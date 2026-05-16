@@ -155,14 +155,20 @@ func (g *GradingCollector) CollectFinalStats(demoStats *DemoStats) {
 			grades = append(grades, grade)
 		}
 
-		// Grenades — HE damage per round.
-		if m, ok := ps.GetMetric(grenadeCategory, Key("damage_per_round")); ok && m.FloatValue > 0 {
-			grade := gradeHigher(m.FloatValue, grenadeBands)
-			ps.AddMetric(grenadeCategory, Key("grade"), Metric{
-				Type: MetricString, StringValue: grade,
-				Description: "Grenade grade — HE damage per round",
-			})
-			grades = append(grades, grade)
+		// Grenades — HE damage per round. Require at least 4 HE throws to
+		// grade: a single lucky 44-damage HE thrown in one round produces
+		// damage_per_round = 2.75 which would otherwise land in the C band,
+		// despite the sample being statistically meaningless.
+		thrown := intMetric(ps, grenadeCategory, Key("thrown"))
+		if thrown >= 4 {
+			if m, ok := ps.GetMetric(grenadeCategory, Key("damage_per_round")); ok && m.FloatValue > 0 {
+				grade := gradeHigher(m.FloatValue, grenadeBands)
+				ps.AddMetric(grenadeCategory, Key("grade"), Metric{
+					Type: MetricString, StringValue: grade,
+					Description: "Grenade grade — HE damage per round (≥4 throws required)",
+				})
+				grades = append(grades, grade)
+			}
 		}
 
 		if overall := averageGrade(grades); overall != "" {

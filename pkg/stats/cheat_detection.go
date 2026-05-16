@@ -195,6 +195,28 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		cheatLikelihood = 100.0
 	}
 
+	// Sniper-anomaly overrides — Tim's custom rules. These are high-confidence
+	// "no-way-this-is-human" signals that pin the likelihood at 100% regardless
+	// of the composite. Independent of each other, either alone is enough.
+	if metric, found := playerStats.GetMetric(sniperCategory, Key("sniper_wallbang_kills")); found && metric.IntValue > 10 {
+		cheatLikelihood = 100.0
+		playerStats.AddMetric(Category("anti_cheat"), Key("sniper_wallbang_override"), Metric{
+			Type:        MetricString,
+			StringValue: "Yes",
+			Description: ">10 sniper wallbang kills (AWP/Scout/Scar-20/G3SG1 through a wall) — pinned to 100%",
+		})
+	}
+	if scoutKills, found := playerStats.GetMetric(sniperCategory, Key("scout_kills")); found && scoutKills.IntValue > 10 {
+		if hsRate, found := playerStats.GetMetric(sniperCategory, Key("scout_hs_rate")); found && hsRate.FloatValue >= 80.0 {
+			cheatLikelihood = 100.0
+			playerStats.AddMetric(Category("anti_cheat"), Key("scout_precision_override"), Metric{
+				Type:        MetricString,
+				StringValue: "Yes",
+				Description: ">10 SSG-08 kills with >=80% headshot rate — pinned to 100%",
+			})
+		}
+	}
+
 	// === Add explanatory metrics for transparency ===
 	playerStats.AddMetric(Category("anti_cheat"), Key("hs_score"), Metric{
 		Type:        MetricFloat,

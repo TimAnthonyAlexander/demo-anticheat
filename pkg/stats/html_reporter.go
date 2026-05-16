@@ -262,6 +262,7 @@ var categoryDisplay = []struct {
 	{Category("recoil"), "Recoil Control", ""},
 	{Category("weapons"), "Weapon Usage", ""},
 	{Category("utility"), "Grenades", ""},
+	{Category("sniper"), "Sniper Anomalies", ""},
 	{Category("behavioral"), "Behavioral", "informational"},
 	{Category("game_info"), "Game Info", ""},
 }
@@ -351,6 +352,14 @@ func categoryKeyOrder(cat Category, k Key) string {
 			Key("wingman_boost"),
 			Key("competitive_boost"),
 			Key("position_discount"),
+			Key("sniper_wallbang_override"),
+			Key("scout_precision_override"),
+		},
+		Category("sniper"): {
+			Key("sniper_wallbang_kills"),
+			Key("scout_kills"),
+			Key("scout_hs_kills"),
+			Key("scout_hs_rate"),
 		},
 		Category("kills"): {
 			Key("grade"),
@@ -476,8 +485,14 @@ func metricLabel(_ Category, k Key) string {
 		Key("killed"):               "Killed",
 		Key("he_detonated"):         "HE detonated",
 		Key("he_zero_damage"):       "HE with 0 damage",
-		Key("grade"):                "Grade",
-		Key("overall"):              "Overall grade",
+		Key("grade"):                  "Grade",
+		Key("overall"):                "Overall grade",
+		Key("sniper_wallbang_kills"): "Sniper wallbang kills",
+		Key("scout_kills"):           "Scout kills",
+		Key("scout_hs_kills"):        "Scout headshot kills",
+		Key("scout_hs_rate"):         "Scout headshot %",
+		Key("sniper_wallbang_override"): "Sniper wallbang override",
+		Key("scout_precision_override"): "Scout precision override",
 	}
 	if v, ok := overrides[k]; ok {
 		return v
