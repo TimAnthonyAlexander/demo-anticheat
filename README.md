@@ -43,7 +43,7 @@ Pass `--html` (or set `DEMOANTICHEAT_HTML=1`) to also write a self-contained `in
 
 ![Report](docs/report.png)
 
-A sample report from `demos/walls_wingman.dem` is committed at [`index.html`](./index.html) — clone the repo and open it in a browser.
+A sample report from `demos/walls_wingman.dem` is committed at [`index.html`](./index.html). View it rendered via [htmlpreview](https://htmlpreview.github.io/?https://github.com/timanthonyalexander/demo-anticheat/blob/master/index.html), or download the raw file and open it directly — it's a single self-contained file with no JS or external assets.
 
 ---
 
