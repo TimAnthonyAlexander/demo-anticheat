@@ -1,23 +1,18 @@
 # demo-anticheat
 
-**CS2 Demo Automated Cheat Detection**  
-_A fast, extensible CLI tool for statistically analyzing Counter-Strike 2 demos and surfacing likely cheaters with explainable metrics._
+**CS2 Demo Automated Cheat Detection**
+_Statistical analysis of Counter-Strike 2 demos. Every flag backed by metrics you can read._
 
 ---
 
 ## Features
 
-- **Automated parsing and statistical analysis of CS2 demo files**
-- **Cheat detection based on real game data, not just intuition**
-- **Metrics for every player:**
-  - Weapon usage breakdown (knife, non-knife, unarmed)
-  - Headshot percentage (with minimum sample guard)
-  - Snap-angle velocity (degrees per millisecond, P95/avg/median)
-  - Human reaction time window (10th percentile, median, sub-100ms shot ratio)
-- **Composite cheat-likelihood score** with clear justification for every flag
-- **CLI interface, rapid bulk processing, and machine-readable output possible**
-- **Modular, extensible architecture** – add your own metrics with minimal code
-- **Support for CS2 share codes** – analyze demos directly from share codes
+- Parses the current CS2 demo format (late 2025 / 2026 onward — see [Compatibility](#compatibility))
+- Per-player metrics: weapon usage, headshot rate, snap-angle velocity, reaction-time distribution, recoil control, behavioral signals
+- Composite cheat-likelihood score, calibrated against ground-truth-labeled demos
+- Auto-detects Wingman vs. Competitive and adjusts scoring accordingly
+- CS2 share-code support — downloads demos directly from Valve
+- Modular collectors: add a new metric in well under 100 lines
 
 ---
 
@@ -25,7 +20,7 @@ _A fast, extensible CLI tool for statistically analyzing Counter-Strike 2 demos 
 
 ### Install
 
-Requires Go ≥ 1.18
+Requires Go ≥ 1.24.
 
 ```sh
 git clone https://github.com/timanthonyalexander/demo-anticheat
@@ -35,58 +30,59 @@ go build
 
 ### Analyze a Demo
 
-#### Using a local demo file:
-
 ```sh
+# Local file
 ./demo-anticheat analyze path/to/demo.dem
-```
 
-#### Using a CS2 share code:
-
-```sh
+# CS2 share code (downloads, decompresses, analyzes, deletes)
 ./demo-anticheat analyze CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
+
+# Keep the downloaded demo, or save to a directory
+./demo-anticheat analyze --keep --output-dir ~/cs2-demos CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
 ```
 
-When using a share code, the tool will:
-1. Download the demo from Valve's servers
-2. Decompress the .bz2 file
-3. Analyze the demo automatically
-4. Delete the downloaded file after analysis (unless the `--keep` flag is used)
+### Inspect a Share Code
 
-Additional share code options:
-```sh
-# Save downloaded demos to a specific directory
-./demo-anticheat analyze --output-dir ~/cs2-demos CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
-
-# Keep the downloaded demo file after analysis
-./demo-anticheat analyze --keep CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
-```
-
-#### Get info about a CS2 share code:
 ```sh
 ./demo-anticheat sharecode CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
 ```
 
-This will display information about the share code including:
-- Match ID
-- Outcome ID
-- Download URL
-- And other metadata
+Prints match ID, outcome ID, download URL, and other metadata.
 
-The tool will process the demo and print a multi-part report showing weapon, aim, reaction, and cheat-likelihood statistics for every player.
+---
 
-⸻
+## Detection Methodology
 
-Extending With New Statistics
+Every player gets a **composite cheat-likelihood score** (0–100%). Scores ≥ **50%** auto-flag as `Cheater: Yes`. The threshold is calibrated against ground-truth-labeled demos:
 
-The system is designed for rapid experimentation:
-	1.	Create a new collector by implementing the stats.Collector interface.
-	2.	Register your collector with the analyzer (in pkg/analyzer/analyzer.go).
-	3.	Your stats will be auto-included in the per-player and per-demo output.
+- 2 confirmed Wingman wallhackers — both auto-flag
+- 12 confirmed clean players (2 Wingman teammates + 10 pros from a 5v5 reference demo) — none flag
 
-Example: Adding a Custom Statistic
+A regression test suite (`pkg/analyzer/detector_test.go`) enforces a ≥ 10% margin between the lowest-scoring known cheater and the highest-scoring clean pro. Run with `go test ./...` — tests skip cleanly if the reference demos aren't checked in locally.
 
-```
+### Signals
+
+| Category | What it measures |
+|---|---|
+| **Weapon usage** | % of time on knife / weapon / unarmed |
+| **Headshots** | HS rate, gated to ≥ 10 kills to avoid small-sample noise |
+| **Snap angle** | View-angle velocity (°/ms): avg, median, P95 |
+| **Reaction time** | 10th-percentile and median time from sight to shot; sub-100 ms ratio |
+| **Recoil control** | Spray-pattern angular deviation vs. known weapon recoil |
+| **Behavioral (informational)** | Back-killed %, pre-FOV pre-aim°, off-engagement attention° — wallhack-targeted signals, **not yet included in the score**: at 2v2 Wingman sample sizes they don't reliably separate cheaters from skilled clean players. Emitted so a larger corpus can calibrate them later. |
+| **Game context** | Wingman vs. Competitive auto-detection; Wingman gets a 1.8× score boost above 10 kills (tighter outlier space — 2 enemies, smaller maps, shorter rounds) |
+
+Every flag prints the per-signal contributions, so you can read the math.
+
+---
+
+## Extending With New Statistics
+
+1. Implement the `stats.Collector` interface.
+2. Register your collector in `pkg/analyzer/analyzer.go`.
+3. Your metric appears in the per-player report automatically.
+
+```go
 type MyStatsCollector struct {
     *stats.BaseCollector
 }
@@ -98,81 +94,41 @@ func NewMyStatsCollector() *MyStatsCollector {
 }
 
 func (c *MyStatsCollector) CollectFrame(parser demoinfocs.Parser, demoStats *stats.DemoStats) {
-    // Frame-by-frame logic here
+    // Per-frame logic
 }
 
 func (c *MyStatsCollector) CollectFinalStats(demoStats *stats.DemoStats) {
-    // End-of-demo aggregation here
+    // End-of-demo aggregation
 }
 ```
 
-Register your collector with the analyzer so it’s included in every run.
+See `pkg/stats/behavioral_collectors.go` for a richer example using event subscriptions.
 
-⸻
+---
 
-### Statistics Included
+## Compatibility
 
-- **Weapon Usage Analysis**
-    - Real-time tracking of equipment choices (knife, primary, secondary weapons)
-    - Percentage breakdowns of combat vs. utility time
-    - Weapon preference patterns that may indicate script assistance
+| Tool version | CS2 demo format |
+|---|---|
+| **v2.x** | Current (late 2025 / 2026 onward) |
+| v1.x | Pre-late-2025 only — crashes on newer demos (`unable to find existing entity inside sendtables2`) |
 
-- **Headshot Analytics**
-    - Per-player headshot percentage with statistical significance guards
-    - Headshot consistency across weapon types and engagement distances
-    - Anomaly detection for headshot rates exceeding statistical norms
+v2.0.0 upgraded to `demoinfocs-golang v5` for the new wire format. Use v2.x for any modern demo.
 
-- **Precision Aim Detection**
-    - Snap-angle velocity measurements (degrees per millisecond)
-    - P95/median/average aim adjustment speed analysis
-    - Sub-2° micro-adjustments tracking that identifies aim assistance
-
-- **Reaction Time Analysis**
-    - Human-impossible reaction windows flagging (sub-100ms response rates)
-    - 10th percentile and median reaction time calculations
-    - Visual contact to shot timing measurements across engagement types
-
-- **Recoil Control Patterns**
-    - Spray pattern deviation analysis against known weapon recoil
-    - Inhuman consistency detection in automatic weapon control
-    - Angular error measurements detecting script-assisted compensation
-
-- **Game Context Intelligence**
-    - Automatic game mode detection (Competitive, Wingman)
-    - Round tracking and performance normalization
-    - Special high-performance analysis for statistical outliers
-
-- **Composite Cheat Detection**
-    - Multi-factor weighted scoring system with transparent explanation
-    - Customizable sensitivity with confidence thresholds
-    - Performance-adjusted scoring that accounts for game context
-    - Special flagging for exceptional performances (39+ kills in regulation, 15+ in Wingman)
-
-Each metric is individually tracked, statistically validated, and contributes to an overall cheat likelihood score that provides clear justification for every verdict.
-
-⸻
+---
 
 ## Philosophy
 
-demo-anticheat aims to provide objective, transparent, and extensible cheat detection for Counter-Strike 2 servers, leagues, or analysts.
-It’s not a “VAC” clone – every verdict is backed by statistics you can read and adjust.
-Add your own metrics, tune the weights, or use as a baseline for ML-based detection.
+Objective, transparent, extensible. Every verdict is backed by statistics you can read and tune — not a black box. Use as-is, adjust the weights, or treat as a baseline for ML-based detection.
 
-⸻
+---
 
 ## Contributing
 
-Pull requests and new metric ideas are welcome.
-This project values modularity and clarity—add your own collector, document your math, and show your work.
+PRs and metric ideas welcome. Add a collector, document your math, show your work. If you tune the detector, keep `detector_test.go` green.
 
-⸻
+---
 
 ## License
 
-MIT
-
-⸻
-
-For feedback, bugs, or suggestions, open an issue or contact Tim at info@t17r.com
-
-Let me know if you want a compact or more technical/contributor-focused version.
+MIT. Issues, bugs, suggestions: open an issue or contact Tim at info@t17r.com.
