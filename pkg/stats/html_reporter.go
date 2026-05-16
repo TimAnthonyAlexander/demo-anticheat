@@ -348,6 +348,7 @@ func categoryKeyOrder(cat Category, k Key) string {
 			Key("recoil_score"),
 			Key("wingman_boost"),
 			Key("competitive_boost"),
+			Key("position_discount"),
 		},
 		Category("kills"): {
 			Key("total_kills"),
@@ -381,7 +382,39 @@ func categoryKeyOrder(cat Category, k Key) string {
 	return "z_" + string(k)
 }
 
+// weaponLabels maps each known recoil-tracked weapon's lowercase key prefix
+// to its canonical CS-side display name.
+var weaponLabels = map[string]string{
+	"ak47": "AK-47",
+	"m4a4": "M4A4",
+	"m4a1": "M4A1-S",
+	"mp9":  "MP9",
+	"p90":  "P90",
+}
+
 func metricLabel(_ Category, k Key) string {
+	s := string(k)
+	// Per-weapon recoil keys are emitted as "{weapon}_{suffix}" — handle them
+	// in one place so we don't enumerate every weapon × suffix combo.
+	for prefix, display := range weaponLabels {
+		if !strings.HasPrefix(s, prefix+"_") {
+			continue
+		}
+		suffix := s[len(prefix)+1:]
+		switch suffix {
+		case "shots":
+			return display + " shots"
+		case "bullets":
+			return display + " burst bullets"
+		case "efficiency":
+			return display + " efficiency"
+		case "mean_error":
+			return display + " mean error"
+		case "error_sum":
+			return display + " error sum"
+		}
+	}
+
 	overrides := map[Key]string{
 		Key("hs_score"):             "Headshot score",
 		Key("snap_score"):           "Snap score",
@@ -390,6 +423,7 @@ func metricLabel(_ Category, k Key) string {
 		Key("total_cheat_score"):    "Combined score",
 		Key("wingman_boost"):        "Wingman boost",
 		Key("competitive_boost"):    "Competitive boost",
+		Key("position_discount"):    "Position discount",
 		Key("p95_snap_velocity"):    "P95 snap velocity",
 		Key("avg_snap_velocity"):    "Avg snap velocity",
 		Key("median_snap_velocity"): "Median snap velocity",

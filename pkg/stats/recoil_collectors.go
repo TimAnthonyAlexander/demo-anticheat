@@ -155,13 +155,25 @@ type RecoilControlCollector struct {
 	*BaseCollector
 	sprayStates      map[uint64]*sprayState
 	tickRate         float64
-	maxBurstGap      int
+	maxBurstGapMs    float64
 	minBurstSize     int
 	maxBulletIdx     int
 	goodThreshold    float64
 	perfectThreshold float64
 	debugMode        bool // Enable debugging
 	burstIDCounter   int  // For debug output
+}
+
+// maxBurstGapTicks returns the burst-gap threshold in ticks at the current
+// tick rate. AK cycles in ~100 ms (6.4 ticks at 64 Hz); using a fixed integer
+// in ticks was tighter than the weapon's own cycle on 64-tick demos and
+// outright broken on 128-tick demos. A time budget keeps both honest.
+func (rc *RecoilControlCollector) maxBurstGapTicks() int {
+	tr := rc.tickRate
+	if tr <= 0 {
+		tr = 64.0
+	}
+	return int(rc.maxBurstGapMs * tr / 1000.0)
 }
 
 // sprayState tracks the state of a player's weapon spray
@@ -184,8 +196,8 @@ func NewRecoilControlCollector() *RecoilControlCollector {
 	return &RecoilControlCollector{
 		BaseCollector:    NewBaseCollector("Recoil Control", Category("recoil")),
 		sprayStates:      make(map[uint64]*sprayState),
-		maxBurstGap:      6,     // Ticks between shots to consider it part of the same burst
-		minBurstSize:     4,     // Minimum bullets to consider a valid burst
+		maxBurstGapMs:    220,   // ms between shots within a burst. Above AK's 100 ms cycle with comfortable margin for jitter; below the gap between intentional tap-fires (~300 ms+).
+		minBurstSize:     3,     // Minimum bullets to consider a valid burst
 		maxBulletIdx:     30,    // Maximum bullets to track in a spray pattern
 		goodThreshold:    0.7,   // Threshold for good recoil control (in degrees)
 		perfectThreshold: 0.3,   // Threshold for suspiciously perfect recoil control (in degrees)
@@ -257,6 +269,15 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 		return
 	}
 
+	// Count every shot fired, independent of whether it lands in a trackable
+	// burst. This is the "AK-47 shots" number that matches authoritative demo
+	// tools; the burst-scored metric is a separate internal number used for
+	// recoil-pattern matching.
+	if shooterStats := demoStats.GetOrCreatePlayerStats(shooter); shooterStats != nil {
+		shotsKey := Key(fmt.Sprintf("%s_shots", weaponTypeToString(weapon.Type)))
+		shooterStats.IncrementIntMetric(Category("recoil"), shotsKey)
+	}
+
 	// Get weapon name for debugging
 	weaponName := getWeaponName(weapon)
 
@@ -297,14 +318,21 @@ func (rc *RecoilControlCollector) handleWeaponFire(e events.WeaponFire, parser d
 
 	if exists && state.inBurst {
 		// Continue existing burst if within gap threshold
-		if currentTick-state.lastFireTick <= rc.maxBurstGap {
+		if currentTick-state.lastFireTick <= rc.maxBurstGapTicks() {
 			// Update bullet index first
 			state.bulletIndex++
 
-			// Check if the bullet is in the range we want to analyze (4-30)
-			if state.bulletIndex >= 4 && state.bulletIndex <= rc.maxBulletIdx {
+			// Check if the bullet is in the range we want to analyze.
+			// Start at bullet 3 (paired with minBurstSize=3) — pros rarely
+			// full-spray AKs at pro engagement ranges, so scoring earlier
+			// bullets is the only way to surface AK data on pro demos.
+			if state.bulletIndex >= 3 && state.bulletIndex <= rc.maxBulletIdx {
 				// Get the expected recoil offsets for this bullet index (in degrees)
-				expectedYawOffset, expectedPitchOffset := getRecoilOffsets(state.weapon, state.bulletIndex)
+				expectedYawOffset, expectedPitchOffset, hasPattern := getRecoilOffsets(state.weapon, state.bulletIndex)
+				if !hasPattern {
+					state.lastFireTick = currentTick
+					return
+				}
 
 				// Calculate expected aim angles (in degrees)
 				// We subtract offsets because we want to compensate for recoil
@@ -635,18 +663,21 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 	fmt.Println()
 }
 
-// interpretation returns an interpretation of the recoil control based on mean error
+// interpretation returns a label describing the recoil profile, oriented
+// around the cheat-detection axis: tighter than human → more suspicious.
+// The label is not a skill rating — a pro with "Wide spread" simply means
+// their spray is in the normal human range, not that their aim is bad.
 func interpretation(meanError float64, perfectThreshold, goodThreshold float64) string {
 	if meanError <= 0.0 {
 		return "No data"
 	} else if meanError <= perfectThreshold {
-		return "Perfect (suspicious)"
+		return "Bot-perfect"
 	} else if meanError <= goodThreshold {
-		return "Very good"
+		return "Very tight"
 	} else if meanError <= 1.0 {
-		return "Average"
+		return "Human range"
 	} else {
-		return "Poor"
+		return "Wide spread"
 	}
 }
 
@@ -700,70 +731,43 @@ func weaponTypeToString(weaponType common.EquipmentType) string {
 	}
 }
 
-// isAutomaticWeapon returns true if the weapon type is automatic
+// isAutomaticWeapon returns true only for weapons that have a defined spray
+// pattern in SprayPattern. Comparing fire against a fake "default pattern"
+// produces noise (we previously tracked Negev/Galil/etc. that way and ended
+// up with meaningless mean-error values), so we restrict the set to weapons
+// we can actually score against ground truth.
 func isAutomaticWeapon(weapon *common.Equipment) bool {
 	if weapon == nil {
 		return false
 	}
-
-	// Check by weapon name first (most reliable in CS2)
-	name := weapon.String()
-	switch name {
-	case "AK-47", "M4A1", "M4A4", "M4A1-S", "FAMAS", "Galil AR",
-		"SG 553", "SG 556", "AUG", "MP9", "MAC-10", "MP7", "P90",
-		"UMP-45", "PP-Bizon", "Negev", "M249":
-		return true
-	}
-
-	// Primary check - look for specific weapons by type
 	switch weapon.Type {
-	case common.EqAK47, common.EqM4A4, common.EqM4A1,
-		common.EqFamas, common.EqGalil,
-		common.EqMP7, common.EqMP9, common.EqP90,
-		common.EqUMP, common.EqNegev,
-		common.EqM249, common.EqSG556, common.EqAUG:
+	case common.EqAK47, common.EqM4A4, common.EqM4A1, common.EqMP9, common.EqP90:
 		return true
 	}
-
-	// Secondary check - include any rifle or SMG with multiple bullets
-	weaponClass := weapon.Class()
-	if weaponClass == common.EqClassSMG || weaponClass == common.EqClassRifle {
+	switch weapon.String() {
+	case "AK-47", "M4A4", "M4A1", "M4A1-S", "MP9", "P90":
 		return true
 	}
-
 	return false
 }
 
-// getRecoilOffsets returns the expected yaw/pitch offsets for a specific weapon and bullet index
-// These are approximations of the recoil patterns for different weapons
-// Returns values in DEGREES
-func getRecoilOffsets(weaponType common.EquipmentType, bulletIndex int) (float64, float64) {
-	// Clamp bullet index to prevent out-of-bounds access
+// getRecoilOffsets returns the expected yaw/pitch offsets (in degrees) for a
+// specific weapon and bullet index. Returns (0, 0, false) when no spray
+// pattern is defined; callers should skip those weapons entirely rather than
+// score them against a synthetic fallback curve.
+func getRecoilOffsets(weaponType common.EquipmentType, bulletIndex int) (float64, float64, bool) {
 	if bulletIndex < 1 {
 		bulletIndex = 1
 	} else if bulletIndex > 30 {
 		bulletIndex = 30
 	}
-
-	// Use the spray pattern map to get the offsets
-	if pattern, exists := SprayPattern[weaponType]; exists && len(pattern) > 0 {
-		if bulletIndex-1 < len(pattern) {
-			return pattern[bulletIndex-1][0], pattern[bulletIndex-1][1]
-		} else if len(pattern) > 0 {
-			// Use the last available pattern entry if we're beyond the pattern length
-			lastIdx := len(pattern) - 1
-			return pattern[lastIdx][0], pattern[lastIdx][1]
-		}
+	pattern, exists := SprayPattern[weaponType]
+	if !exists || len(pattern) == 0 {
+		return 0, 0, false
 	}
-
-	// Default pattern if specific weapon not defined
-	// Approximation: mostly vertical recoil increasing with bullet count
-	yawOffset := 0.0
-	if bulletIndex > 10 {
-		// After bullet 10, add some horizontal movement
-		phase := float64(bulletIndex-10) * 0.6
-		yawOffset = math.Sin(phase) * float64(bulletIndex) * 0.3
+	idx := bulletIndex - 1
+	if idx >= len(pattern) {
+		idx = len(pattern) - 1
 	}
-	pitchOffset := math.Min(float64(bulletIndex)*0.7, 20.0)
-	return yawOffset, pitchOffset
+	return pattern[idx][0], pattern[idx][1], true
 }

@@ -169,6 +169,25 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		})
 	}
 
+	// Scoreboard-position discount: players who never climbed off the bottom
+	// of their team's scoreboard are statistically much less likely cheaters.
+	// Apply a modest multiplicative reduction (max 20%) keyed to the avg
+	// rank-fraction across round 5, halftime, and end snapshots. Top fraggers
+	// (factor 0) are unaffected; this is a context modifier, not an override.
+	if metric, found := playerStats.GetMetric(scoreboardCategory, Key("position_factor")); found {
+		factor := metric.FloatValue
+		if factor > 0 {
+			discount := 0.20 * factor
+			cheatLikelihood *= (1.0 - discount)
+
+			playerStats.AddMetric(Category("anti_cheat"), Key("position_discount"), Metric{
+				Type:        MetricPercentage,
+				FloatValue:  discount * 100,
+				Description: "Reduction applied for low scoreboard position vs. teammates",
+			})
+		}
+	}
+
 	// Make sure we don't exceed 100%
 	if cheatLikelihood > 100.0 {
 		cheatLikelihood = 100.0

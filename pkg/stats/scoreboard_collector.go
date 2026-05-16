@@ -1,6 +1,8 @@
 package stats
 
 import (
+	"sort"
+
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/events"
@@ -8,10 +10,17 @@ import (
 
 // ScoreboardCollector emits CS2-scoreboard-style basic stats per player:
 // team side, kills, deaths, assists, MVPs, damage → ADR, headshot %.
-// Lives in its own category so it stays separate from analytical metrics.
+// Also snapshots per-round kill counts so a position_factor (avg rank-fraction
+// within team at round 5 / halftime / end) can be derived for the detector.
 type ScoreboardCollector struct {
 	*BaseCollector
 	roundCount int
+	snapshots  []map[uint64]playerSnap
+}
+
+type playerSnap struct {
+	kills int64
+	side  common.Team
 }
 
 const scoreboardCategory = Category("scoreboard")
@@ -25,6 +34,22 @@ func NewScoreboardCollector() *ScoreboardCollector {
 func (sc *ScoreboardCollector) Setup(parser demoinfocs.Parser, demoStats *DemoStats) {
 	parser.RegisterEventHandler(func(_ events.RoundEnd) {
 		sc.roundCount++
+
+		snap := map[uint64]playerSnap{}
+		for _, p := range parser.GameState().Participants().Playing() {
+			if p == nil || p.SteamID64 == 0 {
+				continue
+			}
+			ps := demoStats.GetOrCreatePlayerStats(p)
+			if ps == nil {
+				continue
+			}
+			snap[p.SteamID64] = playerSnap{
+				kills: intMetric(ps, scoreboardCategory, Key("kills")),
+				side:  p.Team,
+			}
+		}
+		sc.snapshots = append(sc.snapshots, snap)
 	})
 
 	parser.RegisterEventHandler(func(e events.Kill) {
@@ -101,6 +126,88 @@ func (sc *ScoreboardCollector) CollectFinalStats(demoStats *DemoStats) {
 			})
 		}
 	}
+
+	sc.assignPositionFactors(demoStats)
+}
+
+// assignPositionFactors writes a per-player position_factor metric: the
+// average rank-fraction within their current side at round 5, halftime, and
+// the final round (0.0 = consistent top, 1.0 = consistent bottom). The cheat
+// detector reads this and damps likelihood for players who never climbed off
+// the bottom of their team's scoreboard.
+func (sc *ScoreboardCollector) assignPositionFactors(demoStats *DemoStats) {
+	if len(sc.snapshots) == 0 {
+		return
+	}
+	checkpoints := checkpointIndices(len(sc.snapshots))
+	if len(checkpoints) == 0 {
+		return
+	}
+
+	totals := map[uint64]float64{}
+	counts := map[uint64]int{}
+
+	for _, idx := range checkpoints {
+		snap := sc.snapshots[idx]
+
+		bySide := map[common.Team][]uint64{}
+		for sid, s := range snap {
+			if s.side == common.TeamTerrorists || s.side == common.TeamCounterTerrorists {
+				bySide[s.side] = append(bySide[s.side], sid)
+			}
+		}
+
+		for _, sids := range bySide {
+			if len(sids) < 2 {
+				continue
+			}
+			sort.SliceStable(sids, func(i, j int) bool {
+				return snap[sids[i]].kills > snap[sids[j]].kills
+			})
+			for rank, sid := range sids {
+				frac := float64(rank) / float64(len(sids)-1)
+				totals[sid] += frac
+				counts[sid]++
+			}
+		}
+	}
+
+	for sid, total := range totals {
+		c := counts[sid]
+		if c == 0 {
+			continue
+		}
+		ps, ok := demoStats.Players[sid]
+		if !ok {
+			continue
+		}
+		ps.AddMetric(scoreboardCategory, Key("position_factor"), Metric{
+			Type:        MetricFloat,
+			FloatValue:  total / float64(c),
+			Description: "Avg rank within team at round 5 / halftime / end (0 = top, 1 = bottom)",
+		})
+	}
+}
+
+// checkpointIndices returns the 0-indexed positions in the snapshot slice for
+// round 5, the midpoint, and the final round. Duplicates are deduped (e.g. a
+// 10-round demo has midpoint at round 5).
+func checkpointIndices(n int) []int {
+	rounds := []int{5, n / 2, n}
+	seen := map[int]bool{}
+	out := []int{}
+	for _, r := range rounds {
+		if r < 1 || r > n {
+			continue
+		}
+		idx := r - 1
+		if seen[idx] {
+			continue
+		}
+		seen[idx] = true
+		out = append(out, idx)
+	}
+	return out
 }
 
 func recordTeam(ps *PlayerStats, p *common.Player) {
