@@ -537,29 +537,6 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 				Description: "Mean angular error in recoil control (degrees)",
 			})
 
-			// Calculate recoil efficiency
-			// Formula: recoilEff = 1 - clamp01((meanErr - 0.30) / 0.45)
-			// 0% at 0.75 degrees or higher, 100% at 0.3 degrees or lower
-			var recoilEfficiency float64
-
-			// Manually calculate efficiency based on mean error
-			if meanError <= 0.3 {
-				recoilEfficiency = 100.0 // Perfect efficiency (suspicious)
-			} else if meanError >= 0.75 {
-				recoilEfficiency = 0.0 // No efficiency
-			} else {
-				// Linear scale between 0.3 and 0.75 degrees
-				recoilEfficiency = 100.0 * (1.0 - ((meanError - 0.3) / 0.45))
-			}
-
-			fmt.Printf("Player %d - Recoil Efficiency: %.2f%%\n", steamID, recoilEfficiency)
-
-			playerStats.AddMetric(Category("recoil"), Key("recoil_efficiency"), Metric{
-				Type:        MetricPercentage,
-				FloatValue:  recoilEfficiency,
-				Description: "Recoil control efficiency (higher is more suspicious)",
-			})
-
 			// Calculate recoil score for the cheat detector (0-1 scale)
 			recoilScore := 0.0
 			if meanError <= 0.3 {
@@ -596,12 +573,6 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 				Description: "Mean angular error in recoil control (degrees) - no data",
 			})
 
-			playerStats.AddMetric(Category("recoil"), Key("recoil_efficiency"), Metric{
-				Type:        MetricPercentage,
-				FloatValue:  0,
-				Description: "Recoil control efficiency - no data",
-			})
-
 			playerStats.AddMetric(Category("recoil"), Key("recoil_score"), Metric{
 				Type:        MetricFloat,
 				FloatValue:  0,
@@ -635,26 +606,8 @@ func (rc *RecoilControlCollector) CollectFinalStats(demoStats *DemoStats) {
 						Description: fmt.Sprintf("Mean error for %s (degrees)", weaponTypeToString(weaponType)),
 					})
 
-					// Calculate weapon-specific efficiency
-					var weaponEfficiency float64
-					if weaponMeanError <= 0.3 {
-						weaponEfficiency = 100.0 // Perfect efficiency (suspicious)
-					} else if weaponMeanError >= 0.75 {
-						weaponEfficiency = 0.0 // No efficiency
-					} else {
-						// Linear scale between 0.3 and 0.75 degrees
-						weaponEfficiency = 100.0 * (1.0 - ((weaponMeanError - 0.3) / 0.45))
-					}
-
-					// Store weapon-specific efficiency
-					playerStats.AddMetric(Category("recoil"), Key(fmt.Sprintf("%s_efficiency", weaponTypeToString(weaponType))), Metric{
-						Type:        MetricPercentage,
-						FloatValue:  weaponEfficiency,
-						Description: fmt.Sprintf("Recoil control efficiency for %s", weaponTypeToString(weaponType)),
-					})
-
-					fmt.Printf("Player %d - %s: %.2f° mean error, %.2f%% efficiency\n",
-						steamID, weaponTypeToString(weaponType), weaponMeanError, weaponEfficiency)
+					fmt.Printf("Player %d - %s: %.2f° mean error\n",
+						steamID, weaponTypeToString(weaponType), weaponMeanError)
 				}
 			}
 		}
