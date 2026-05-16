@@ -1,0 +1,1233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>demo-anticheat — walls_wingman.dem</title>
+<style>
+:root {
+  --bg: #0a0c11;
+  --bg-elev: #11141c;
+  --bg-card: #161a24;
+  --border: #232938;
+  --border-bright: #2d3447;
+  --text: #e9ecf3;
+  --text-dim: #97a0b5;
+  --text-faint: #5d667c;
+  --accent: #6b8cff;
+  --green: #4ade80;
+  --green-soft: rgba(74, 222, 128, 0.12);
+  --amber: #f59e0b;
+  --amber-soft: rgba(245, 158, 11, 0.14);
+  --red: #ef4444;
+  --red-soft: rgba(239, 68, 68, 0.12);
+  --red-glow: rgba(239, 68, 68, 0.22);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  min-height: 100vh;
+  background-image:
+    radial-gradient(ellipse 60% 50% at 50% 0%, rgba(107, 140, 255, 0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 90% 100%, rgba(239, 68, 68, 0.05) 0%, transparent 50%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+.container { max-width: 1240px; margin: 0 auto; padding: 64px 32px; }
+header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 40px; }
+.brand { font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text-dim); font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.brand .dot { display: inline-block; width: 6px; height: 6px; background: var(--red); border-radius: 50%; box-shadow: 0 0 14px var(--red); animation: pulse 2.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.85); } }
+.timestamp { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.05em; }
+
+h1 { font-size: 44px; font-weight: 700; letter-spacing: -0.025em; margin: 0 0 10px; line-height: 1.1; }
+.subtitle { color: var(--text-dim); margin-bottom: 48px; font-size: 15px; }
+.subtitle code { font-family: ui-monospace, "SF Mono", Menlo, monospace; background: var(--bg-elev); padding: 3px 9px; border-radius: 5px; color: var(--text); font-size: 12px; border: 1px solid var(--border); }
+
+.verdict { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 64px; }
+.tile { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 22px 24px; position: relative; overflow: hidden; }
+.tile.accent-red::before { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, var(--red-soft) 0%, transparent 60%); pointer-events: none; }
+.tile.accent-green::before { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, var(--green-soft) 0%, transparent 60%); pointer-events: none; }
+.tile-label { color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; margin-bottom: 10px; position: relative; }
+.tile-value { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; position: relative; }
+.tile-value .of { font-size: 16px; font-weight: 400; color: var(--text-faint); margin-left: 4px; }
+.tile-value.flag { color: var(--red); }
+.tile-value.amber { color: var(--amber); }
+.tile-value.clean { color: var(--green); }
+.tile-sub { color: var(--text-faint); font-size: 12px; margin-top: 6px; position: relative; }
+
+.section-title { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-faint); font-weight: 700; margin: 0 0 24px; display: flex; align-items: center; gap: 16px; }
+.section-title::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+.players { display: grid; grid-template-columns: 1fr; gap: 18px; }
+.player { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 28px 32px; transition: border-color 0.2s; position: relative; overflow: hidden; }
+.player.flagged { border-color: rgba(239, 68, 68, 0.55); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25), 0 24px 64px -16px var(--red-glow); }
+.player.flagged::before { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, var(--red-soft) 0%, transparent 35%); pointer-events: none; }
+.player-head { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; margin-bottom: 28px; position: relative; }
+.player-name { font-size: 26px; font-weight: 700; letter-spacing: -0.015em; margin: 0 0 6px; }
+.player-id { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.04em; }
+.likelihood { display: flex; align-items: center; gap: 18px; }
+.badge { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; white-space: nowrap; }
+.badge.flag { background: var(--red-soft); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.42); }
+.badge.ok { background: var(--green-soft); color: var(--green); border: 1px solid rgba(74, 222, 128, 0.32); }
+.badge .pip { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+
+.gauge { width: 84px; height: 84px; position: relative; flex-shrink: 0; }
+.gauge svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+.gauge .track { stroke: var(--border-bright); }
+.gauge .fill { transition: stroke-dashoffset 0.6s ease; }
+.gauge .fill.flag { stroke: var(--red); filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.5)); }
+.gauge .fill.amber { stroke: var(--amber); }
+.gauge .fill.clean { stroke: var(--green); }
+.gauge-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+.categories { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 28px; position: relative; }
+.category { padding: 12px 0; }
+.category h3 { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-faint); font-weight: 700; margin: 0 0 10px; }
+.category h3 .note { color: var(--amber); font-weight: 600; margin-left: 6px; text-transform: none; letter-spacing: 0; font-size: 10px; }
+.metrics { display: grid; gap: 0; }
+.metric { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.metric:last-child { border-bottom: none; }
+.metric .k { color: var(--text-dim); font-size: 13px; }
+.metric .v { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
+.metric .v.hot { color: var(--red); }
+.metric .v.warm { color: var(--amber); }
+.metric .v.cool { color: var(--green); }
+.metric .v.dim { color: var(--text-faint); }
+
+.empty { text-align: center; padding: 80px 20px; color: var(--text-faint); }
+
+footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: 11px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; letter-spacing: 0.02em; }
+footer a { color: var(--text-dim); text-decoration: none; }
+footer a:hover { color: var(--text); }
+
+@media (max-width: 720px) {
+  .container { padding: 36px 18px; }
+  h1 { font-size: 32px; }
+  .player { padding: 22px 20px; }
+  .player-head { grid-template-columns: 1fr; }
+  .likelihood { justify-content: flex-start; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="brand"><span class="dot"></span>demo-anticheat</div>
+    <div class="timestamp">2026-05-16 22:43:32 CEST</div>
+  </header>
+
+  <h1>walls_wingman.dem</h1>
+  <div class="subtitle">
+    Map <code>de_inferno</code> · 4 players analyzed · <code>Wingman</code> · 16 rounds
+  </div>
+
+  <div class="verdict">
+    <div class="tile accent-red">
+      <div class="tile-label">Players Flagged</div>
+      <div class="tile-value flag">2<span class="of">of 4</span></div>
+      <div class="tile-sub">Auto-flag threshold ≥ 50% likelihood</div>
+    </div>
+    <div class="tile">
+      <div class="tile-label">Highest Likelihood</div>
+      <div class="tile-value flag">100.0%</div>
+      <div class="tile-sub">wingman ANDY</div>
+    </div>
+    <div class="tile">
+      <div class="tile-label">Lowest Likelihood</div>
+      <div class="tile-value clean">0.0%</div>
+      <div class="tile-sub">𝖋𝖊𝖓𝖊𝖘𝖍𝖊</div>
+    </div>
+    <div class="tile">
+      <div class="tile-label">Score Spread</div>
+      <div class="tile-value">100.0<span class="of">pts</span></div>
+      <div class="tile-sub">Distance between highest and lowest</div>
+    </div>
+  </div>
+
+  <div class="section-title">Per-Player Analysis</div>
+
+  
+  <div class="players">
+    
+    <div class="player flagged">
+      <div class="player-head">
+        <div>
+          <h2 class="player-name">wingman ANDY</h2>
+          <div class="player-id">STEAM 76561199383848692</div>
+        </div>
+        <div class="likelihood">
+          <div class="gauge">
+            <svg viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="34" class="track" fill="none" stroke-width="6"/>
+              <circle cx="40" cy="40" r="34" class="fill flag" fill="none" stroke-width="6" stroke-linecap="round" stroke-dasharray="213.63" stroke-dashoffset="0.00"/>
+            </svg>
+            <div class="gauge-num">100%</div>
+          </div>
+          <div class="badge flag"><span class="pip"></span>Flagged</div>
+        </div>
+      </div>
+      <div class="categories">
+        
+        <div class="category">
+          <h3>Score Breakdown</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Combined score</span>
+              <span class="v hot">0.80</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot score</span>
+              <span class="v hot">1.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Snap score</span>
+              <span class="v hot">0.99</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Reaction score</span>
+              <span class="v warm">0.70</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Wingman boost</span>
+              <span class="v hot">Yes</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Combat</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Total kills</span>
+              <span class="v ">16</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot kills</span>
+              <span class="v ">12</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot %</span>
+              <span class="v hot">75.00%</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Aim Snap</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Snap count</span>
+              <span class="v ">10</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Avg snap velocity</span>
+              <span class="v ">1.19</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Median snap velocity</span>
+              <span class="v ">0.90</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">P95 snap velocity</span>
+              <span class="v hot">3.49</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Snapped Kills</span>
+              <span class="v ">16</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Reaction Time</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Reaction samples</span>
+              <span class="v ">66</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">P10 reaction time</span>
+              <span class="v hot">78.12</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Median reaction time</span>
+              <span class="v ">343.75</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Sub-100 ms ratio</span>
+              <span class="v hot">28.79%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Reaction Cheat Score</span>
+              <span class="v ">0.70</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Shots After Fov Entry</span>
+              <span class="v ">66</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Recoil Control</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Burst Count</span>
+              <span class="v ">2</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Galil Bullets</span>
+              <span class="v ">7</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Galil Error Sum</span>
+              <span class="v ">11.11</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Mean Angular Error</span>
+              <span class="v ">1.59</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil Efficiency</span>
+              <span class="v ">0.00%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil Interpretation</span>
+              <span class="v ">Poor</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Total Counted Bullets</span>
+              <span class="v ">7</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Total Error Sum</span>
+              <span class="v ">11.11</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Weapon Usage</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Knife time</span>
+              <span class="v ">14.60%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Unarmed time</span>
+              <span class="v ">6.29%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Weapon time</span>
+              <span class="v ">79.11%</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Behavioral <span class="note">informational</span></h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Back Killed Pct</span>
+              <span class="v ">0.00%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Back Killed Total Deaths</span>
+              <span class="v ">7</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Nearest Enemy Angle Median Deg</span>
+              <span class="v ">32.21</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Nearest Enemy Angle Samples</span>
+              <span class="v ">48651</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Pre Fov Aim Median Deg</span>
+              <span class="v ">6.17</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Pre Fov Aim Samples</span>
+              <span class="v ">7</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Game Info</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Game mode</span>
+              <span class="v ">Wingman</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Rounds</span>
+              <span class="v ">16</span>
+            </div>
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="player flagged">
+      <div class="player-head">
+        <div>
+          <h2 class="player-name">キルア</h2>
+          <div class="player-id">STEAM 76561199558035269</div>
+        </div>
+        <div class="likelihood">
+          <div class="gauge">
+            <svg viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="34" class="track" fill="none" stroke-width="6"/>
+              <circle cx="40" cy="40" r="34" class="fill flag" fill="none" stroke-width="6" stroke-linecap="round" stroke-dasharray="213.63" stroke-dashoffset="77.24"/>
+            </svg>
+            <div class="gauge-num">64%</div>
+          </div>
+          <div class="badge flag"><span class="pip"></span>Flagged</div>
+        </div>
+      </div>
+      <div class="categories">
+        
+        <div class="category">
+          <h3>Score Breakdown</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Combined score</span>
+              <span class="v ">0.35</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Snap score</span>
+              <span class="v hot">1.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Reaction score</span>
+              <span class="v warm">0.70</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Wingman boost</span>
+              <span class="v hot">Yes</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Combat</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Total kills</span>
+              <span class="v ">11</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot kills</span>
+              <span class="v ">5</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot %</span>
+              <span class="v ">45.45%</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Aim Snap</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Snap count</span>
+              <span class="v ">9</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Avg snap velocity</span>
+              <span class="v ">1.01</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Median snap velocity</span>
+              <span class="v ">0.62</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">P95 snap velocity</span>
+              <span class="v hot">5.01</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Snapped Kills</span>
+              <span class="v ">11</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Reaction Time</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Reaction samples</span>
+              <span class="v ">64</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">P10 reaction time</span>
+              <span class="v hot">78.12</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Median reaction time</span>
+              <span class="v ">93.75</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Sub-100 ms ratio</span>
+              <span class="v hot">56.25%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Reaction Cheat Score</span>
+              <span class="v ">0.70</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Shots After Fov Entry</span>
+              <span class="v ">64</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Recoil Control</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Burst Count</span>
+              <span class="v ">1</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Mean Angular Error</span>
+              <span class="v ">1.34</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Mp9 Bullets</span>
+              <span class="v ">5</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Mp9 Efficiency</span>
+              <span class="v ">0.00%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Mp9 Error Sum</span>
+              <span class="v ">6.70</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Mp9 Mean Error</span>
+              <span class="v ">1.34</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil Efficiency</span>
+              <span class="v ">0.00%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil Interpretation</span>
+              <span class="v ">Poor</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Total Counted Bullets</span>
+              <span class="v ">5</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Total Error Sum</span>
+              <span class="v ">6.70</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Weapon Usage</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Knife time</span>
+              <span class="v ">31.18%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Unarmed time</span>
+              <span class="v ">21.77%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Weapon time</span>
+              <span class="v ">47.06%</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Behavioral <span class="note">informational</span></h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Back Killed Pct</span>
+              <span class="v ">0.00%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Back Killed Total Deaths</span>
+              <span class="v ">9</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Nearest Enemy Angle Median Deg</span>
+              <span class="v ">26.38</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Nearest Enemy Angle Samples</span>
+              <span class="v ">37189</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Pre Fov Aim Median Deg</span>
+              <span class="v ">7.25</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Pre Fov Aim Samples</span>
+              <span class="v ">5</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Game Info</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Game mode</span>
+              <span class="v ">Wingman</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Rounds</span>
+              <span class="v ">16</span>
+            </div>
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="player ">
+      <div class="player-head">
+        <div>
+          <h2 class="player-name">⚚_NaYp1x_⚚</h2>
+          <div class="player-id">STEAM 76561198175724267</div>
+        </div>
+        <div class="likelihood">
+          <div class="gauge">
+            <svg viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="34" class="track" fill="none" stroke-width="6"/>
+              <circle cx="40" cy="40" r="34" class="fill clean" fill="none" stroke-width="6" stroke-linecap="round" stroke-dasharray="213.63" stroke-dashoffset="191.26"/>
+            </svg>
+            <div class="gauge-num">10%</div>
+          </div>
+          <div class="badge ok"><span class="pip"></span>Clear</div>
+        </div>
+      </div>
+      <div class="categories">
+        
+        <div class="category">
+          <h3>Score Breakdown</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Combined score</span>
+              <span class="v ">0.10</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Snap score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Reaction score</span>
+              <span class="v warm">0.70</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Combat</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Total kills</span>
+              <span class="v ">6</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot kills</span>
+              <span class="v ">3</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot %</span>
+              <span class="v ">50.00%</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Aim Snap</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Snap count</span>
+              <span class="v ">6</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Avg snap velocity</span>
+              <span class="v ">0.25</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Median snap velocity</span>
+              <span class="v ">0.13</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">P95 snap velocity</span>
+              <span class="v ">0.85</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Snapped Kills</span>
+              <span class="v ">6</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Reaction Time</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Reaction samples</span>
+              <span class="v ">77</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">P10 reaction time</span>
+              <span class="v hot">78.12</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Median reaction time</span>
+              <span class="v ">93.75</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Sub-100 ms ratio</span>
+              <span class="v hot">55.84%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Reaction Cheat Score</span>
+              <span class="v ">0.70</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Shots After Fov Entry</span>
+              <span class="v ">77</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Recoil Control</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Burst Count</span>
+              <span class="v ">3</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Galil Bullets</span>
+              <span class="v ">6</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Galil Error Sum</span>
+              <span class="v ">9.12</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Mean Angular Error</span>
+              <span class="v ">1.52</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil Efficiency</span>
+              <span class="v ">0.00%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil Interpretation</span>
+              <span class="v ">Poor</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Total Counted Bullets</span>
+              <span class="v ">6</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Total Error Sum</span>
+              <span class="v ">9.12</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Weapon Usage</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Knife time</span>
+              <span class="v ">10.00%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Unarmed time</span>
+              <span class="v ">16.99%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Weapon time</span>
+              <span class="v ">73.01%</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Behavioral <span class="note">informational</span></h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Back Killed Pct</span>
+              <span class="v ">0.00%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Back Killed Total Deaths</span>
+              <span class="v ">11</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Nearest Enemy Angle Median Deg</span>
+              <span class="v ">33.52</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Nearest Enemy Angle Samples</span>
+              <span class="v ">42353</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Game Info</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Game mode</span>
+              <span class="v ">Wingman</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Rounds</span>
+              <span class="v ">16</span>
+            </div>
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="player ">
+      <div class="player-head">
+        <div>
+          <h2 class="player-name">𝖋𝖊𝖓𝖊𝖘𝖍𝖊</h2>
+          <div class="player-id">STEAM 76561199801779382</div>
+        </div>
+        <div class="likelihood">
+          <div class="gauge">
+            <svg viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="34" class="track" fill="none" stroke-width="6"/>
+              <circle cx="40" cy="40" r="34" class="fill clean" fill="none" stroke-width="6" stroke-linecap="round" stroke-dasharray="213.63" stroke-dashoffset="213.63"/>
+            </svg>
+            <div class="gauge-num">0%</div>
+          </div>
+          <div class="badge ok"><span class="pip"></span>Clear</div>
+        </div>
+      </div>
+      <div class="categories">
+        
+        <div class="category">
+          <h3>Score Breakdown</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Combined score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Snap score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Reaction score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Combat</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Total kills</span>
+              <span class="v ">4</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot kills</span>
+              <span class="v ">1</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Headshot %</span>
+              <span class="v ">25.00%</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Aim Snap</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Snap count</span>
+              <span class="v ">3</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Avg snap velocity</span>
+              <span class="v ">0.22</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Median snap velocity</span>
+              <span class="v ">0.12</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">P95 snap velocity</span>
+              <span class="v ">0.53</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Snapped Kills</span>
+              <span class="v ">4</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Reaction Time</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Reaction samples</span>
+              <span class="v ">28</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">P10 reaction time</span>
+              <span class="v ">156.25</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Median reaction time</span>
+              <span class="v ">234.38</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Sub-100 ms ratio</span>
+              <span class="v ">7.14%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Reaction Cheat Score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Shots After Fov Entry</span>
+              <span class="v ">28</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Recoil Control</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Mean Angular Error</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil Efficiency</span>
+              <span class="v ">0.00%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil Interpretation</span>
+              <span class="v ">No data</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Recoil score</span>
+              <span class="v ">0.00</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Weapon Usage</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Knife time</span>
+              <span class="v ">23.23%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Unarmed time</span>
+              <span class="v ">36.52%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Weapon time</span>
+              <span class="v ">40.25%</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Behavioral <span class="note">informational</span></h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Back Killed Pct</span>
+              <span class="v ">20.00%</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Back Killed Total Deaths</span>
+              <span class="v ">10</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Nearest Enemy Angle Median Deg</span>
+              <span class="v ">27.10</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Nearest Enemy Angle Samples</span>
+              <span class="v ">32760</span>
+            </div>
+            
+          </div>
+        </div>
+        
+        <div class="category">
+          <h3>Game Info</h3>
+          <div class="metrics">
+            
+            <div class="metric">
+              <span class="k">Game mode</span>
+              <span class="v ">Wingman</span>
+            </div>
+            
+            <div class="metric">
+              <span class="k">Rounds</span>
+              <span class="v ">16</span>
+            </div>
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+  </div>
+  
+
+  <footer>
+    <span>Generated by <a href="https://github.com/timanthonyalexander/demo-anticheat">demo-anticheat</a> · MIT</span>
+    <span>4 players · 151 metrics</span>
+  </footer>
+</div>
+</body>
+</html>

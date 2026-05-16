@@ -4,11 +4,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/timanthonyalexander/demo-anticheat/pkg/analyzer"
 	"github.com/timanthonyalexander/demo-anticheat/pkg/stats"
 )
+
+var htmlOut bool
+
+const htmlEnvVar = "DEMOANTICHEAT_HTML"
+const htmlOutputFile = "index.html"
 
 var analyzeCmd = &cobra.Command{
 	Use:   "analyze [demo-file]",
@@ -41,10 +47,53 @@ var analyzeCmd = &cobra.Command{
 			return fmt.Errorf("error generating report: %v", err)
 		}
 
+		if shouldWriteHTML() {
+			if err := writeHTMLReport(results); err != nil {
+				return fmt.Errorf("error generating html report: %v", err)
+			}
+		}
+
 		return nil
 	},
 }
 
+func shouldWriteHTML() bool {
+	if htmlOut {
+		return true
+	}
+	return envTruthy(os.Getenv(htmlEnvVar))
+}
+
+func envTruthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "0", "false", "no", "off", "f", "n":
+		return false
+	}
+	return true
+}
+
+func writeHTMLReport(results analyzer.Results) error {
+	reporter, err := stats.NewHTMLReporter()
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(htmlOutputFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if err := reporter.Report(results.DemoStats, results.Categories, f); err != nil {
+		return err
+	}
+
+	abs, _ := filepath.Abs(htmlOutputFile)
+	fmt.Printf("\nHTML report written to: %s\n", abs)
+	return nil
+}
+
 func init() {
 	rootCmd.AddCommand(analyzeCmd)
+	analyzeCmd.Flags().BoolVar(&htmlOut, "html", false, "Also write an HTML report to ./index.html")
 }
