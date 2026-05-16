@@ -78,11 +78,11 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		snapCount = metric.IntValue
 	}
 
-	if metric, found := playerStats.GetMetric(Category("reaction"), Key("p10_reaction_time")); found {
+	if metric, found := playerStats.GetMetric(Category("reaction"), Key("p10_ttd")); found {
 		p10Reaction = metric.FloatValue
 	}
 
-	if metric, found := playerStats.GetMetric(Category("reaction"), Key("reaction_samples")); found {
+	if metric, found := playerStats.GetMetric(Category("reaction"), Key("ttd_samples")); found {
 		reactionSamples = metric.IntValue
 	}
 
@@ -103,11 +103,13 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 		snapScore = clamp01((p95SnapVelocity - 2.0) / 1.5)
 	}
 
-	// Reaction time factor
-	// 0 at 120ms, 1 at 60ms or below
+	// Time-to-damage factor (replaces the old "reaction time" component).
+	// p10Reaction is now Leetify-style P10 TTD (sight → first damage) in ms.
+	// Clean players land at 400+ ms P10; cheaters with info or aim assistance
+	// land much lower. Score: 0 at 400 ms, 1 at 100 ms or below.
 	rtScore := 0.0
-	if reactionSamples >= 5 { // Need at least a few samples for reliable data
-		rtScore = clamp01((120.0 - p10Reaction) / 60.0)
+	if reactionSamples >= 5 {
+		rtScore = clamp01((400.0 - p10Reaction) / 300.0)
 	}
 
 	// Recoil control factor

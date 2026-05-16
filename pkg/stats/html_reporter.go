@@ -377,10 +377,10 @@ func categoryKeyOrder(cat Category, k Key) string {
 		},
 		Category("reaction"): {
 			Key("grade"),
-			Key("reaction_samples"),
-			Key("p10_reaction_time"),
-			Key("median_reaction_time"),
-			Key("sub_100ms_ratio"),
+			Key("ttd_samples"),
+			Key("p10_ttd"),
+			Key("median_ttd"),
+			Key("sub_100ms_ttd"),
 		},
 		Category("game_info"): {
 			Key("game_mode"),
@@ -455,10 +455,10 @@ func metricLabel(_ Category, k Key) string {
 		Key("avg_snap_velocity"):    "Avg snap velocity",
 		Key("median_snap_velocity"): "Median snap velocity",
 		Key("snap_count"):           "Snap count",
-		Key("p10_reaction_time"):    "P10 reaction time",
-		Key("median_reaction_time"): "Median reaction time",
-		Key("sub_100ms_ratio"):      "Sub-100 ms ratio",
-		Key("reaction_samples"):     "Reaction samples",
+		Key("p10_ttd"):              "P10 time-to-damage",
+		Key("median_ttd"):           "Median time-to-damage",
+		Key("sub_100ms_ttd"):        "Sub-100 ms TTD share",
+		Key("ttd_samples"):          "TTD samples",
 		Key("total_kills"):          "Total kills",
 		Key("headshot_kills"):       "Headshot kills",
 		Key("headshot_percentage"):  "Headshot %",
@@ -518,14 +518,14 @@ func metricClass(cat Category, k Key, m Metric) string {
 		if m.FloatValue >= 2.0 {
 			return "warm"
 		}
-	case Key("p10_reaction_time"):
-		if m.FloatValue > 0 && m.FloatValue <= 80 {
+	case Key("p10_ttd"):
+		if m.FloatValue > 0 && m.FloatValue <= 150 {
 			return "hot"
 		}
-		if m.FloatValue > 0 && m.FloatValue <= 120 {
+		if m.FloatValue > 0 && m.FloatValue <= 300 {
 			return "warm"
 		}
-	case Key("sub_100ms_ratio"):
+	case Key("sub_100ms_ttd"):
 		if m.FloatValue >= 20 {
 			return "hot"
 		}

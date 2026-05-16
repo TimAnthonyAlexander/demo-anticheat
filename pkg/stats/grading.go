@@ -28,15 +28,19 @@ var (
 		{1, "C"},
 		{0.5, "D"},
 	}
-	// Lower-is-better: edge is the upper bound for that grade.
+	// Lower-is-better. TTD (sight → first damage) bands. Leetify's published
+	// ranges put fast-pro at 400–500 ms and most clean players at 500–600 ms,
+	// so the ladder is shifted accordingly. Anything <350 ms is exceptional;
+	// <200 ms across many engagements is statistically implausible (cheat
+	// signal, not skill).
 	reactionBands = []gradeBand{
-		{130, "A+"},
-		{180, "A"},
-		{220, "B+"},
-		{260, "B"},
-		{320, "C+"},
-		{400, "C"},
-		{500, "D"},
+		{350, "A+"},
+		{450, "A"},
+		{550, "B+"},
+		{650, "B"},
+		{750, "C+"},
+		{850, "C"},
+		{950, "D"},
 	}
 	recoilBands = []gradeBand{
 		{0.6, "A+"},
@@ -132,7 +136,7 @@ func (g *GradingCollector) CollectFinalStats(demoStats *DemoStats) {
 		}
 
 		// Reaction — P10 sight-to-shot in ms.
-		if m, ok := ps.GetMetric(Category("reaction"), Key("p10_reaction_time")); ok && m.FloatValue > 0 {
+		if m, ok := ps.GetMetric(Category("reaction"), Key("p10_ttd")); ok && m.FloatValue > 0 {
 			grade := gradeLower(m.FloatValue, reactionBands)
 			ps.AddMetric(Category("reaction"), Key("grade"), Metric{
 				Type: MetricString, StringValue: grade,
