@@ -16,6 +16,12 @@ type ScoreboardCollector struct {
 	*BaseCollector
 	roundCount int
 	snapshots  []map[uint64]playerSnap
+	// roundKills counts each player's kills inside the current round. CS2
+	// demos don't fire the legacy round_mvp event, so we award MVP to the
+	// top fragger of each round at RoundEnd. This misses bomb-planter /
+	// defuser MVPs but matches the in-game MVP awarded the vast majority
+	// of rounds.
+	roundKills map[uint64]int
 }
 
 type playerSnap struct {
@@ -28,12 +34,36 @@ const scoreboardCategory = Category("scoreboard")
 func NewScoreboardCollector() *ScoreboardCollector {
 	return &ScoreboardCollector{
 		BaseCollector: NewBaseCollector("Scoreboard", scoreboardCategory),
+		roundKills:    map[uint64]int{},
 	}
 }
 
 func (sc *ScoreboardCollector) Setup(parser demoinfocs.Parser, demoStats *DemoStats) {
+	parser.RegisterEventHandler(func(_ events.RoundStart) {
+		// Reset per-round MVP-tracking. We do NOT clear at RoundEnd because
+		// RoundEnd fires first, then we award MVP, then the next RoundStart
+		// resets.
+		sc.roundKills = map[uint64]int{}
+	})
+
 	parser.RegisterEventHandler(func(_ events.RoundEnd) {
 		sc.roundCount++
+
+		// Award MVP heuristically to the top fragger of this round.
+		// Ties broken by lower SteamID (stable).
+		var mvpSID uint64
+		mvpKills := 0
+		for sid, k := range sc.roundKills {
+			if k > mvpKills || (k == mvpKills && (mvpSID == 0 || sid < mvpSID)) {
+				mvpSID = sid
+				mvpKills = k
+			}
+		}
+		if mvpSID != 0 && mvpKills > 0 {
+			if ps, ok := demoStats.Players[mvpSID]; ok {
+				ps.IncrementIntMetric(scoreboardCategory, Key("mvps"))
+			}
+		}
 
 		snap := map[uint64]playerSnap{}
 		for _, p := range parser.GameState().Participants().Playing() {
@@ -68,6 +98,7 @@ func (sc *ScoreboardCollector) Setup(parser demoinfocs.Parser, demoStats *DemoSt
 					kps.IncrementIntMetric(scoreboardCategory, Key("hs_kills"))
 				}
 				recordTeam(kps, e.Killer)
+				sc.roundKills[e.Killer.SteamID64]++
 			}
 		}
 
@@ -94,15 +125,9 @@ func (sc *ScoreboardCollector) Setup(parser demoinfocs.Parser, demoStats *DemoSt
 		recordTeam(aps, e.Attacker)
 	})
 
-	parser.RegisterEventHandler(func(e events.RoundMVPAnnouncement) {
-		if e.Player == nil {
-			return
-		}
-		if ps := demoStats.GetOrCreatePlayerStats(e.Player); ps != nil {
-			ps.IncrementIntMetric(scoreboardCategory, Key("mvps"))
-			recordTeam(ps, e.Player)
-		}
-	})
+	// NOTE: events.RoundMVPAnnouncement is a CS:GO legacy game-event that CS2
+	// demos do not emit. MVP counts are computed heuristically at RoundEnd
+	// from the per-round top-fragger above. See sc.roundKills.
 }
 
 func (sc *ScoreboardCollector) CollectFinalStats(demoStats *DemoStats) {
