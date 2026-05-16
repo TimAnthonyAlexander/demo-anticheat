@@ -40,6 +40,7 @@ func NewAnalyzer(demoPath string) *Analyzer {
 	analyzer.RegisterCollector(stats.NewGrenadeCollector())       // Per-player grenade usage
 	analyzer.RegisterCollector(stats.NewBehavioralCollector())    // Wallhack-targeted behavioral signals
 	analyzer.RegisterCollector(stats.NewCheatDetector())          // CheatDetector should be last to use results from other collectors
+	analyzer.RegisterCollector(stats.NewGradingCollector())       // Grades come after everything else has run
 
 	return analyzer
 }

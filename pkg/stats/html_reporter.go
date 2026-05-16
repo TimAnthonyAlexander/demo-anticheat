@@ -254,6 +254,7 @@ var categoryDisplay = []struct {
 	Title string
 	Note  string
 }{
+	{Category("rating"), "Skill Rating", ""},
 	{Category("anti_cheat"), "Score Breakdown", ""},
 	{Category("kills"), "Combat", ""},
 	{Category("aiming"), "Aim Snap", ""},
@@ -352,6 +353,7 @@ func categoryKeyOrder(cat Category, k Key) string {
 			Key("position_discount"),
 		},
 		Category("kills"): {
+			Key("grade"),
 			Key("total_kills"),
 			Key("headshot_kills"),
 			Key("headshot_percentage"),
@@ -362,7 +364,19 @@ func categoryKeyOrder(cat Category, k Key) string {
 			Key("median_snap_velocity"),
 			Key("p95_snap_velocity"),
 		},
+		Category("recoil"): {
+			Key("grade"),
+			Key("mean_angular_error"),
+			Key("burst_count"),
+			Key("total_counted_bullets"),
+			Key("total_error_sum"),
+			Key("recoil_interpretation"),
+		},
+		Category("rating"): {
+			Key("overall"),
+		},
 		Category("reaction"): {
+			Key("grade"),
 			Key("reaction_samples"),
 			Key("p10_reaction_time"),
 			Key("median_reaction_time"),
@@ -373,6 +387,7 @@ func categoryKeyOrder(cat Category, k Key) string {
 			Key("round_count"),
 		},
 		Category("utility"): {
+			Key("grade"),
 			Key("thrown"),
 			Key("damage"),
 			Key("damage_per_throw"),
@@ -461,6 +476,8 @@ func metricLabel(_ Category, k Key) string {
 		Key("killed"):               "Killed",
 		Key("he_detonated"):         "HE detonated",
 		Key("he_zero_damage"):       "HE with 0 damage",
+		Key("grade"):                "Grade",
+		Key("overall"):              "Overall grade",
 	}
 	if v, ok := overrides[k]; ok {
 		return v
