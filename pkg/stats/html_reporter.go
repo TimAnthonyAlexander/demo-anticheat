@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"math"
 	"sort"
 	"strings"
 	"time"
@@ -37,9 +36,7 @@ func (hr *HTMLReporter) Report(demoStats *DemoStats, _ []Category, writer io.Wri
 
 const (
 	flagThreshold    = 50.0
-	amberThreshold   = 25.0
-	gaugeRadius      = 34.0
-	gaugeCircumf     = 2.0 * math.Pi * gaugeRadius
+	warnThreshold    = 25.0
 	placeholderSteam = 0
 )
 
@@ -51,14 +48,30 @@ type htmlData struct {
 	FlaggedCount      int
 	HighestLikelihood float64
 	HighestName       string
-	HighestClass      string
 	LowestLikelihood  float64
 	LowestName        string
-	Spread            float64
 	GameMode          string
 	RoundCount        int64
 	MetricCount       int
+	Teams             []htmlTeam
 	Players           []htmlPlayer
+}
+
+type htmlTeam struct {
+	Label   string
+	Players []htmlScoreRow
+}
+
+type htmlScoreRow struct {
+	Name    string
+	Kills   string
+	Deaths  string
+	Assists string
+	ADR     string
+	HS      string
+	MVPs    string
+	// sortKills is unexported but used for ordering before render.
+	sortKills int64
 }
 
 type htmlPlayer struct {
@@ -67,8 +80,6 @@ type htmlPlayer struct {
 	Likelihood      float64
 	LikelihoodClass string
 	Flagged         bool
-	Circumference   float64
-	DashOffset      float64
 	Categories      []htmlCategory
 }
 
@@ -119,20 +130,18 @@ func buildHTMLData(ds *DemoStats) htmlData {
 
 	data.PlayerCount = len(realPlayers)
 	metricCount := 0
-	highest := math.Inf(-1)
-	lowest := math.Inf(1)
 
-	for _, ps := range realPlayers {
+	for i, ps := range realPlayers {
 		hp := buildPlayer(ps)
 		if hp.Flagged {
 			data.FlaggedCount++
 		}
-		if hp.Likelihood > highest {
-			highest = hp.Likelihood
+		if i == 0 || hp.Likelihood > data.HighestLikelihood {
+			data.HighestLikelihood = hp.Likelihood
 			data.HighestName = ps.Player.Name
 		}
-		if hp.Likelihood < lowest {
-			lowest = hp.Likelihood
+		if i == 0 || hp.Likelihood < data.LowestLikelihood {
+			data.LowestLikelihood = hp.Likelihood
 			data.LowestName = ps.Player.Name
 		}
 		for _, cat := range hp.Categories {
@@ -141,15 +150,83 @@ func buildHTMLData(ds *DemoStats) htmlData {
 		data.Players = append(data.Players, hp)
 	}
 
-	if data.PlayerCount > 0 {
-		data.HighestLikelihood = highest
-		data.LowestLikelihood = lowest
-		data.Spread = highest - lowest
-		data.HighestClass = likelihoodClass(highest)
-	}
 	data.MetricCount = metricCount
-
+	data.Teams = buildScoreboard(realPlayers)
 	return data
+}
+
+func buildScoreboard(players []*PlayerStats) []htmlTeam {
+	groups := map[string][]htmlScoreRow{}
+	order := []string{"T", "CT"}
+
+	for _, ps := range players {
+		row, side := buildScoreRow(ps)
+		if row.sortKills == 0 && row.Deaths == "0" && row.ADR == "—" && row.Assists == "0" {
+			// No scoreboard activity at all — skip (probably a spectator or
+			// placeholder slot).
+			continue
+		}
+		groups[side] = append(groups[side], row)
+	}
+
+	out := make([]htmlTeam, 0, 2)
+	for _, side := range order {
+		rows := groups[side]
+		if len(rows) == 0 {
+			continue
+		}
+		sort.Slice(rows, func(i, j int) bool { return rows[i].sortKills > rows[j].sortKills })
+		out = append(out, htmlTeam{Label: side, Players: rows})
+	}
+
+	// Fall back to a single "All" table if no team side was recorded.
+	if len(out) == 0 {
+		if rows := groups[""]; len(rows) > 0 {
+			sort.Slice(rows, func(i, j int) bool { return rows[i].sortKills > rows[j].sortKills })
+			out = append(out, htmlTeam{Label: "All", Players: rows})
+		}
+	}
+	return out
+}
+
+func buildScoreRow(ps *PlayerStats) (htmlScoreRow, string) {
+	side := ""
+	if m, ok := ps.GetMetric(scoreboardCategory, Key("team")); ok {
+		side = m.StringValue
+	}
+
+	kills := intMetric(ps, scoreboardCategory, Key("kills"))
+	deaths := intMetric(ps, scoreboardCategory, Key("deaths"))
+	assists := intMetric(ps, scoreboardCategory, Key("assists"))
+	mvps := intMetric(ps, scoreboardCategory, Key("mvps"))
+
+	adr := "—"
+	if m, ok := ps.GetMetric(scoreboardCategory, Key("adr")); ok && m.FloatValue > 0 {
+		adr = fmt.Sprintf("%.1f", m.FloatValue)
+	}
+	hs := "—"
+	if m, ok := ps.GetMetric(scoreboardCategory, Key("hs_percentage")); ok && kills > 0 {
+		hs = fmt.Sprintf("%.0f%%", m.FloatValue)
+	}
+
+	row := htmlScoreRow{
+		Name:      fallback(ps.Player.Name, "Unknown"),
+		Kills:     fmt.Sprintf("%d", kills),
+		Deaths:    fmt.Sprintf("%d", deaths),
+		Assists:   fmt.Sprintf("%d", assists),
+		ADR:       adr,
+		HS:        hs,
+		MVPs:      fmt.Sprintf("%d", mvps),
+		sortKills: kills,
+	}
+	return row, side
+}
+
+func intMetric(ps *PlayerStats, cat Category, k Key) int64 {
+	if m, ok := ps.GetMetric(cat, k); ok {
+		return m.IntValue
+	}
+	return 0
 }
 
 func buildPlayer(ps *PlayerStats) htmlPlayer {
@@ -159,16 +236,12 @@ func buildPlayer(ps *PlayerStats) htmlPlayer {
 		flagged = true
 	}
 
-	dashOffset := gaugeCircumf * (1.0 - clamp01(likelihood/100.0))
-
 	return htmlPlayer{
 		Name:            fallback(ps.Player.Name, "Unknown"),
 		SteamID:         fmt.Sprintf("%d", ps.Player.SteamID64),
 		Likelihood:      likelihood,
 		LikelihoodClass: likelihoodClass(likelihood),
 		Flagged:         flagged,
-		Circumference:   gaugeCircumf,
-		DashOffset:      dashOffset,
 		Categories:      buildCategories(ps),
 	}
 }
@@ -194,6 +267,8 @@ var categoryDisplay = []struct {
 func buildCategories(ps *PlayerStats) []htmlCategory {
 	out := make([]htmlCategory, 0, len(categoryDisplay))
 	seen := make(map[Category]bool)
+	// scoreboard is rendered in its own section above the cards.
+	seen[scoreboardCategory] = true
 
 	for _, spec := range categoryDisplay {
 		seen[spec.Key] = true
@@ -343,9 +418,6 @@ func metricClass(cat Category, k Key, m Metric) string {
 		if m.StringValue == "Yes" {
 			return "hot"
 		}
-		if m.StringValue == "No" {
-			return "dim"
-		}
 		return ""
 	}
 
@@ -359,31 +431,29 @@ func metricClass(cat Category, k Key, m Metric) string {
 		return ""
 	}
 
-	if k == Key("headshot_percentage") {
+	switch k {
+	case Key("headshot_percentage"):
 		if m.FloatValue >= 70 {
 			return "hot"
 		}
 		if m.FloatValue >= 55 {
 			return "warm"
 		}
-	}
-	if k == Key("p95_snap_velocity") {
+	case Key("p95_snap_velocity"):
 		if m.FloatValue >= 3.0 {
 			return "hot"
 		}
 		if m.FloatValue >= 2.0 {
 			return "warm"
 		}
-	}
-	if k == Key("p10_reaction_time") {
+	case Key("p10_reaction_time"):
 		if m.FloatValue > 0 && m.FloatValue <= 80 {
 			return "hot"
 		}
 		if m.FloatValue > 0 && m.FloatValue <= 120 {
 			return "warm"
 		}
-	}
-	if k == Key("sub_100ms_ratio") {
+	case Key("sub_100ms_ratio"):
 		if m.FloatValue >= 20 {
 			return "hot"
 		}
@@ -398,10 +468,10 @@ func likelihoodClass(v float64) string {
 	if v >= flagThreshold {
 		return "flag"
 	}
-	if v >= amberThreshold {
-		return "amber"
+	if v >= warnThreshold {
+		return "warn"
 	}
-	return "clean"
+	return "ok"
 }
 
 func titleize(s string) string {
