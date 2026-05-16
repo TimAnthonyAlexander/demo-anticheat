@@ -260,6 +260,7 @@ var categoryDisplay = []struct {
 	{Category("reaction"), "Reaction Time", ""},
 	{Category("recoil"), "Recoil Control", ""},
 	{Category("weapons"), "Weapon Usage", ""},
+	{Category("utility"), "Grenades", ""},
 	{Category("behavioral"), "Behavioral", "informational"},
 	{Category("game_info"), "Game Info", ""},
 }
@@ -371,6 +372,17 @@ func categoryKeyOrder(cat Category, k Key) string {
 			Key("game_mode"),
 			Key("round_count"),
 		},
+		Category("utility"): {
+			Key("thrown"),
+			Key("damage"),
+			Key("damage_per_throw"),
+			Key("enemies_per_throw"),
+			Key("damage_per_round"),
+			Key("killed"),
+			Key("he_detonated"),
+			Key("he_zero_damage"),
+			Key("enemy_hits"),
+		},
 	}
 	if list, ok := preset[cat]; ok {
 		for i, key := range list {
@@ -440,6 +452,15 @@ func metricLabel(_ Category, k Key) string {
 		Key("knife_percentage"):     "Knife time",
 		Key("non_knife_percentage"): "Weapon time",
 		Key("no_weapon_percentage"): "Unarmed time",
+		Key("thrown"):               "Thrown",
+		Key("damage"):               "Damage",
+		Key("enemy_hits"):           "Enemy hits",
+		Key("damage_per_throw"):     "Damage per throw",
+		Key("enemies_per_throw"):    "Enemies damaged per throw",
+		Key("damage_per_round"):     "Damage per round",
+		Key("killed"):               "Killed",
+		Key("he_detonated"):         "HE detonated",
+		Key("he_zero_damage"):       "HE with 0 damage",
 	}
 	if v, ok := overrides[k]; ok {
 		return v

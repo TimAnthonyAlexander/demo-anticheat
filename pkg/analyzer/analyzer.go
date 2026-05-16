@@ -37,6 +37,7 @@ func NewAnalyzer(demoPath string) *Analyzer {
 	analyzer.RegisterCollector(stats.NewRecoilControlCollector()) // Add the new recoil control collector
 	analyzer.RegisterCollector(stats.NewGameModeCollector())      // Add the game mode collector
 	analyzer.RegisterCollector(stats.NewScoreboardCollector())    // CS2-style basic scoreboard stats
+	analyzer.RegisterCollector(stats.NewGrenadeCollector())       // Per-player grenade usage
 	analyzer.RegisterCollector(stats.NewBehavioralCollector())    // Wallhack-targeted behavioral signals
 	analyzer.RegisterCollector(stats.NewCheatDetector())          // CheatDetector should be last to use results from other collectors
 
