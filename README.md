@@ -11,7 +11,6 @@ _Statistical analysis of Counter-Strike 2 demos. Every flag backed by metrics yo
 - Per-player metrics: weapon usage, headshot rate, snap-angle velocity, reaction-time distribution, recoil control, behavioral signals
 - Composite cheat-likelihood score, calibrated against ground-truth-labeled demos
 - Auto-detects Wingman vs. Competitive and adjusts scoring accordingly
-- CS2 share-code support — downloads demos directly from Valve
 - Modular collectors: add a new metric in well under 100 lines
 
 ---
@@ -31,23 +30,8 @@ go build
 ### Analyze a Demo
 
 ```sh
-# Local file
 ./demo-anticheat analyze path/to/demo.dem
-
-# CS2 share code (downloads, decompresses, analyzes, deletes)
-./demo-anticheat analyze CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
-
-# Keep the downloaded demo, or save to a directory
-./demo-anticheat analyze --keep --output-dir ~/cs2-demos CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
 ```
-
-### Inspect a Share Code
-
-```sh
-./demo-anticheat sharecode CSGO-BM3rL-nhd28-b2sOo-Yrmta-fQ4qB
-```
-
-Prints match ID, outcome ID, download URL, and other metadata.
 
 ---
 
