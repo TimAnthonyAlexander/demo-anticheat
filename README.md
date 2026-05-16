@@ -33,6 +33,18 @@ go build
 ./demo-anticheat analyze path/to/demo.dem
 ```
 
+### HTML Report
+
+Pass `--html` (or set `DEMOANTICHEAT_HTML=1`) to also write a self-contained `index.html` next to the text output.
+
+```sh
+./demo-anticheat analyze --html path/to/demo.dem
+```
+
+![Report](docs/report.png)
+
+A sample report from `demos/walls_wingman.dem` is committed at [`index.html`](./index.html) — clone the repo and open it in a browser.
+
 ---
 
 ## Detection Methodology
