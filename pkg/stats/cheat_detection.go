@@ -106,9 +106,11 @@ func (cd *CheatDetector) calculateCheatLikelihood(playerStats *PlayerStats) floa
 	// Time-to-damage factor (replaces the old "reaction time" component).
 	// p10Reaction is now Leetify-style P10 TTD (sight → first damage) in ms.
 	// Clean players land at 400+ ms P10; cheaters with info or aim assistance
-	// land much lower. Score: 0 at 400 ms, 1 at 100 ms or below.
+	// land much lower. Score: 0 at 400 ms, 1 at 100 ms or below. Gate matches
+	// the collector's emission threshold so under-sampled 2v2 Wingman players
+	// don't end up with a misleading 0 across every component.
 	rtScore := 0.0
-	if reactionSamples >= 5 {
+	if reactionSamples >= 3 {
 		rtScore = clamp01((400.0 - p10Reaction) / 300.0)
 	}
 
