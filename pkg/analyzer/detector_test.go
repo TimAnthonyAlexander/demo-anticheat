@@ -17,6 +17,13 @@ import (
 //   - SteamID 76561198175724267 ("⚚_NaYp1x_⚚")       — clean
 //   - SteamID 76561199801779382 ("𝖋𝖊𝖓𝖊𝖘𝖍𝖊")          — clean
 //
+// React Andy demo: wallhack_trigger_ban_wingman.dem
+//   - SteamID 76561199383848692 ("React Andy")        — wallhacker + triggerbot
+//     (same identity as "wingman ANDY"; second confirmed-cheater demo).
+//   - SteamID 76561197997413510 ("BupTuk =)")         — clean (assumed)
+//   - SteamID 76561199379706605 ("RUSSIAMBOLA")       — clean (assumed)
+//   - SteamID 76561199619577369 ("--")                — clean (assumed)
+//
 // SHADE vs Kultywator demo: 5v5 league/tournament, all 10 players confirmed clean.
 var (
 	wingmanCheaters = map[uint64]string{
@@ -27,10 +34,19 @@ var (
 		76561198175724267: "⚚_NaYp1x_⚚",
 		76561199801779382: "𝖋𝖊𝖓𝖊𝖘𝖍𝖊",
 	}
+	reactCheaters = map[uint64]string{
+		76561199383848692: "React Andy",
+	}
+	reactClean = map[uint64]string{
+		76561197997413510: "BupTuk =)",
+		76561199379706605: "RUSSIAMBOLA",
+		76561199619577369: "--",
+	}
 )
 
 const (
 	wingmanDemoPath = "../../demos/walls_wingman.dem"
+	reactDemoPath   = "../../demos/wallhack_trigger_ban_wingman.dem"
 	ancientDemoPath = "/Users/tim.alexander/Downloads/2026-05-10_13-38-29_1_de_ancient_SHADE_vs_Kultywator_Stara_Krobia.dem"
 
 	// Required separation between the lowest-scoring known cheater and the
@@ -172,6 +188,87 @@ func TestDetector_DumpBehavioral(t *testing.T) {
 	}
 }
 
+// TestDetector_DumpChannels is diagnostic-only; it prints the per-channel
+// score/confidence/zone matrix from the anti_cheat category for every player
+// in every ground-truth demo. Use this when re-tuning channel weights or
+// calibration breakpoints — running once shows the deltas without asserting.
+func TestDetector_DumpChannels(t *testing.T) {
+	channelIDs := []string{
+		"hs", "snap", "reaction", "ttd_sub100", "recoil",
+		"pre_fov", "pre_fov_presence", "attention", "back_killed", "decoupling",
+	}
+
+	for _, tc := range []struct {
+		label    string
+		path     string
+		cheaters map[uint64]string
+	}{
+		{"wingman", wingmanDemoPath, wingmanCheaters},
+		{"pros", ancientDemoPath, nil},
+	} {
+		abs, err := filepath.Abs(tc.path)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.path, err)
+		}
+		if _, err := os.Stat(abs); os.IsNotExist(err) {
+			t.Logf("skipping %s (demo missing)", tc.label)
+			continue
+		}
+		results, err := NewAnalyzer(abs).Analyze()
+		if err != nil {
+			t.Fatalf("%s analyze: %v", tc.label, err)
+		}
+
+		t.Logf("--- %s channel matrix ---", tc.label)
+		for sid, ps := range results.DemoStats.Players {
+			if sid == 0 {
+				continue
+			}
+			tag := ""
+			if _, isCheat := tc.cheaters[sid]; isCheat {
+				tag = " [CHEATER]"
+			}
+			likelihood := 0.0
+			if m, ok := ps.GetMetric(stats.Category("anti_cheat"), stats.Key("cheat_likelihood")); ok {
+				likelihood = m.FloatValue
+			}
+			t.Logf("  %s (%d)%s — likelihood %.2f%%", ps.Player.Name, sid, tag, likelihood)
+			for _, id := range channelIDs {
+				score := 0.0
+				conf := 0.0
+				zone := "-"
+				if m, ok := ps.GetMetric(stats.Category("anti_cheat"), stats.Key(legacyKeyFor(id, "_score"))); ok {
+					score = m.FloatValue
+				}
+				if m, ok := ps.GetMetric(stats.Category("anti_cheat"), stats.Key(id+"_confidence")); ok {
+					conf = m.FloatValue
+				}
+				if m, ok := ps.GetMetric(stats.Category("anti_cheat"), stats.Key(id+"_zone")); ok {
+					zone = m.StringValue
+				}
+				t.Logf("    %-18s score=%.2f  conf=%.2f  zone=%s", id, score, conf, zone)
+			}
+		}
+	}
+}
+
+// legacyKeyFor returns the anti_cheat metric key for a channel score. The
+// four legacy channels (hs, snap, reaction, recoil) use their legacy names
+// without the "_score" suffix attached to the channel ID.
+func legacyKeyFor(id, suffix string) string {
+	switch id {
+	case "hs":
+		return "hs_score"
+	case "snap":
+		return "snap_score"
+	case "reaction":
+		return "reaction_score"
+	case "recoil":
+		return "recoil_score"
+	}
+	return id + suffix
+}
+
 // TestDetector_WingmanCheatersAboveClean ensures the two known wingman wallhackers
 // score strictly above both clean wingman teammates.
 func TestDetector_WingmanCheatersAboveClean(t *testing.T) {
@@ -275,6 +372,61 @@ func TestDetector_CleanWingmanBelowFlagThreshold(t *testing.T) {
 			t.Errorf("clean wingman player %q (%s) falsely flagged: %.2f%% >= %.2f%%",
 				name, s.name, s.likelihood, flagThreshold)
 		}
+	}
+}
+
+// TestDetector_ReactAndyFlagged asserts the cheater in
+// wallhack_trigger_ban_wingman.dem (same SteamID as wingman ANDY in
+// walls_wingman.dem; second confirmed-cheater demo) is flagged ≥50%.
+func TestDetector_ReactAndyFlagged(t *testing.T) {
+	scores := runAnalyze(t, reactDemoPath)
+	dumpRanked(t, "react andy demo", scores, reactCheaters)
+
+	for sid, name := range reactCheaters {
+		s, ok := scores[sid]
+		if !ok {
+			t.Errorf("known cheater %q (sid %d) missing from analysis", name, sid)
+			continue
+		}
+		if s.likelihood < flagThreshold {
+			t.Errorf("known cheater %q only scored %.2f%%, below flag threshold %.0f%%",
+				s.name, s.likelihood, flagThreshold)
+		}
+	}
+}
+
+// TestDetector_ReactAndyDemoCleanBelow ensures the three other players in
+// the React Andy demo are not falsely flagged.
+func TestDetector_ReactAndyDemoCleanBelow(t *testing.T) {
+	scores := runAnalyze(t, reactDemoPath)
+	for sid, name := range reactClean {
+		s, ok := scores[sid]
+		if !ok {
+			continue
+		}
+		if s.likelihood >= flagThreshold {
+			t.Errorf("clean player %q (%s) falsely flagged in React Andy demo: %.2f%% >= %.2f%%",
+				name, s.name, s.likelihood, flagThreshold)
+		}
+	}
+}
+
+// TestDetector_ReactAndyAboveClean asserts React Andy scores strictly above
+// every other player in the demo. Keeps the ordering honest as we tune.
+func TestDetector_ReactAndyAboveClean(t *testing.T) {
+	scores := runAnalyze(t, reactDemoPath)
+
+	minCheater, cheaterName, foundCheater := minScoreIn(scores, reactCheaters)
+	maxClean, cleanName, foundClean := maxScoreIn(scores, reactClean)
+	if !foundCheater {
+		t.Fatal("React Andy not found in scored players")
+	}
+	if !foundClean {
+		t.Fatal("no clean players found in React Andy demo")
+	}
+	if minCheater <= maxClean {
+		t.Errorf("React Andy ordering broken: %q=%.2f%% must exceed %q=%.2f%%",
+			cheaterName, minCheater, cleanName, maxClean)
 	}
 }
 

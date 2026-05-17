@@ -38,7 +38,12 @@ const (
 	backKillThresholdDeg = 100.0
 	// minBackKillSamples avoids scoring with too few deaths (Wingman 2v2 rounds).
 	minBackKillSamples = 4
-	// minPreFOVSamples avoids scoring with too few kills.
+	// minPreFOVSamples avoids scoring with too few kills. 3-sample readings
+	// produced noisy false positives (a clean teammate landed at 6.94° on
+	// exactly 3 samples — visually wallhack-suspicious but not reliable). The
+	// confidence weight on the pre_fov channel doesn't fully damp the
+	// downstream decoupling channel or the TTD-sub100 co-occurrence floor, so
+	// the noise floor is held at 4.
 	minPreFOVSamples = 4
 	// minAttentionSamples avoids scoring on tiny per-frame samples.
 	minAttentionSamples = 200
