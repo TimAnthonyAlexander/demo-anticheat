@@ -8,12 +8,13 @@ _Statistical analysis of Counter-Strike 2 demos. Every flag backed by metrics yo
 ## Features
 
 - Parses the current CS2 demo format (late 2025 / 2026 onward — see [Compatibility](#compatibility))
-- Per-player metrics: weapon usage, headshot rate, snap-angle velocity, **time-to-damage** (LoS-based, Leetify-aligned), recoil control, HE grenade usage, behavioral signals
-- Composite cheat-likelihood score, calibrated against ground-truth-labeled demos
-- Auto-detects Wingman vs. Competitive and adjusts scoring accordingly
+- **10-channel Bayesian cheat detector** with lobby-relative normalization, channel-by-channel confidence weights, and a transparent log-odds combiner — no black-box weighting
+- Per-player metrics across aim mechanics, reaction time, recoil control, grenade usage, scoreboard activity, and **wallhack-targeted behavioral signals** (pre-FOV pre-aim, fight-vs-idle decoupling, back-kill avoidance)
+- Auto-detects Wingman vs. Competitive; Wingman uses a KPR-based boost so short matches still score correctly
 - CS2-style scoreboard with team split (K/D/A/ADR/MVP) and **scoreboard-position discount** for consistent bottom-fraggers
-- Per-category **skill grades** (A+ → F) plus an overall composite
-- Self-contained HTML report (`--html`); modular collectors — add a new metric in well under 100 lines
+- Per-category **skill grades** (A+ → F) plus an overall composite, highlighted as badges in the HTML report
+- Self-contained HTML report (`--html`) with masonry-balanced category layout, per-channel score/confidence/zone bars, and a boosts/overrides strip
+- Modular collectors — add a new metric in well under 100 lines
 
 ---
 
@@ -28,6 +29,8 @@ git clone https://github.com/timanthonyalexander/demo-anticheat
 cd demo-anticheat
 go build
 ```
+
+Or grab a prebuilt binary from the [latest release](https://github.com/TimAnthonyAlexander/demo-anticheat/releases/latest) — darwin/linux/windows on amd64 and arm64.
 
 ### Analyze a Demo
 
@@ -51,40 +54,81 @@ A sample report from `demos/walls_wingman.dem` is committed at [`index.html`](./
 
 ## Detection Methodology
 
-Every player gets a **composite cheat-likelihood score** (0–100%). Scores ≥ **50%** auto-flag as `Cheater: Yes`. The threshold is calibrated against ground-truth-labeled demos:
+Every player gets a **composite cheat-likelihood score** (0–100%). Scores ≥ **50%** auto-flag as `Cheater: Yes`. The score comes from a Bayesian log-odds combiner over independent evidence channels:
 
-- 2 confirmed Wingman wallhackers — both auto-flag
-- 12 confirmed clean players (2 Wingman teammates + 10 pros from a 5v5 reference demo) — none flag
+```
+prior     = logit(0.10)                            # 10% base-rate cheater probability
+contrib_i = w_i × confidence_i × logit(score_i)    # per-channel evidence
+L         = prior + Σ contrib_i
+likelihood = sigmoid(L) × 100
+```
 
-A regression test suite (`pkg/analyzer/detector_test.go`) enforces a ≥ 10% margin between the lowest-scoring known cheater and the highest-scoring clean pro. Current margin on the reference set is **32pts**: both Wingman wallhackers flag at 100% / 72%, max clean pro sits at 40%. Run with `go test ./...` — tests skip cleanly if the reference demos aren't checked in locally.
+Then game-mode boosts, scoreboard-position discount, evidence-stacking, and a TTD-sub100 high-confidence floor apply in order. Sniper-anomaly overrides pin to 100% when triggered.
 
-### Signals
+Channels run in one of two modes:
 
-| Category | What it measures |
-|---|---|
-| **Weapon usage** | % of time on knife / weapon / unarmed |
-| **Headshots** | HS rate, gated to ≥ 10 kills to avoid small-sample noise |
-| **Snap angle** | View-angle velocity (°/ms): avg, median, P95 |
-| **Time-to-Damage** | Per Leetify's methodology: first sight (CS engine LoS via `m_bSpottedByMask` — real per-tick TraceLine visibility) to first damage. Reports median, P10, sub-100 ms ratio. 1000 ms engagement cap. |
-| **Recoil control** | Spray-pattern angular deviation against known weapon recoil for AK-47, M4A4, M4A1-S, MP9, P90. Per-weapon shot counts match authoritative tools. |
-| **Grenades (HE)** | Throws, damage, damage-per-throw, kills, **HEs with zero damage** — a player landing every HE on enemies (no zero-damage throws over many attempts) implies info advantage. |
-| **Scoreboard position** | Rank within team at round 5 / halftime / end. Consistent bottom-fraggers get up to a 20% likelihood discount — a bottom-team player with strong cheat signals is statistically less likely than a top-fragger with the same signals. |
-| **Behavioral (informational)** | Back-killed %, pre-FOV pre-aim°, off-engagement attention° — wallhack-targeted signals, **not yet included in the score**: at 2v2 Wingman sample sizes they don't reliably separate cheaters from skilled clean players. Emitted so a larger corpus can calibrate them later. |
-| **Game context** | Wingman vs. Competitive auto-detection; Wingman gets a 1.8× score boost above 10 kills (tighter outlier space — 2 enemies, smaller maps, shorter rounds) |
+- **Bidirectional** (`hs`, `reaction`, `pre_fov`): a clean reading is real evidence of cleanness — contributes negative log-odds.
+- **Positive-only** (`snap`, `recoil`, `ttd_sub100`, `attention`, `back_killed`, `pre_fov_presence`, `decoupling`): a clean reading contributes 0. A clean snap or clean recoil doesn't exonerate — it just means we didn't see that particular cheat signature.
 
-Every flag prints the per-signal contributions, so you can read the math.
+### Channels
+
+| Channel | What it measures | Clean → Blatant | Weight |
+|---|---|---|---:|
+| `hs` | Headshot rate | 55% → 75% | 0.18 |
+| `snap` | P95 snap velocity (°/ms) | 2.0 → 3.5 | 0.12 |
+| `reaction` | P10 time-to-damage (ms) — sight via CS engine LoS to first damage | 400 → 100 | 0.10 |
+| `ttd_sub100` | Share of engagements completing in under 100 ms | 2% → 30% | 0.10 |
+| `recoil` | Spray-pattern angular deviation vs. known AK / M4A4 / M4A1-S / MP9 / P90 patterns | 0.75° → 0.20° | 0.10 |
+| `pre_fov` | Median angle between killer's crosshair and victim's position 200 ms before FOV entry | 12° → 4° | 0.20 |
+| `pre_fov_presence` | Sample count × lobby asymmetry — a player who pre-aimed tight angles many times when teammates / opponents didn't | (gated) | 0.10 |
+| `attention` | Median crosshair-to-nearest-enemy angle during off-engagement frames | 33° → 18° | 0.06 |
+| `back_killed` | % of own deaths where the player was looking away from the killer (low = suspicious) | 25% → 3% | 0.06 |
+| `decoupling` | `attention_median − pre_fov_median` — tight in fights but loose when chilling | 8° → 22° | 0.10 |
+
+The `decoupling` channel is the one nobody else publishes. Wallhackers concentrate during engagements but their crosshair drifts during chill/walking; legit players are consistent across both phases. Both halves come from existing per-frame metrics, no extra parsing.
+
+### Boosts, discounts, and overrides
+
+- **Wingman boost (×1.8)** when `KPR ≥ 0.7 OR kills ≥ 10`. KPR keeps short Wingman demos that end at 8–9 rounds from slipping past the gate.
+- **Competitive boost (×1.2)** when `kills > 39` in ≤ 30 rounds.
+- **Position discount (× up to 0.80)** for consistent bottom-of-team players — same cheat signals are statistically less likely on a bottom-fragger than a top-fragger.
+- **Evidence stacking (×1.4)** when ≥ 3 channels each register `score × confidence ≥ 0.30`. Independent moderate signals compound the way the underlying probability model says they should.
+- **TTD-sub100 high floor (≥ 55%)** when sub-100ms TTD rate ≥ 25% on ≥ 3 samples AND a pre-FOV pattern is present AND the lobby is asymmetric in pre-FOV samples. All four gates required — peeker's-advantage pre-fires alone don't trip it.
+- **Sniper-anomaly overrides (pin to 100%)**: >10 sniper wallbang kills, or >10 Scout kills with ≥ 80% HS rate.
+
+### Lobby-relative normalization
+
+Per channel, drop the highest-scoring lobby member, take the mean of the rest, and shrink everyone's score by 40% of that trimmed mean. A tight clean lobby where every player has good preaim pulls everyone down; a lobby with one outlier keeps the outlier visible. Skipped when fewer than 2 players have meaningful data on a channel.
+
+### Ground truth and regression tests
+
+`pkg/analyzer/detector_test.go` runs 10 tests against three reference demos:
+
+| Demo | Players | Status |
+|---|---|---|
+| `walls_wingman.dem` (2v2 Wingman) | 2 confirmed wallhackers, 2 confirmed clean teammates | flagged / not flagged |
+| `wallhack_trigger_ban_wingman.dem` (2v2 Wingman) | 1 confirmed wallhack+triggerbot cheater (same SteamID as the first demo's lead cheater — different demo of the same player), 3 clean | flagged / not flagged |
+| SHADE vs Kultywator (5v5 Premier) | 10 confirmed-clean pros | none flagged |
+
+The test suite enforces a **≥ 10-point margin** between the lowest-scoring known cheater and the highest-scoring clean pro. Current margin on the reference set is **~44 points**. Tests skip cleanly if the reference demos aren't checked in locally — run with `go test ./...`.
+
+Every flag publishes the per-channel score, confidence, and zone under the `anti_cheat` category, so you can read the math.
 
 ### Skill grades
 
-Independent of cheat detection, each player gets an **A+ → F** grade per category (Combat / Reaction / Recoil / Grenades) plus an overall composite. Thresholds are calibrated to a wide Faceit L4–L10 player distribution; useful for relative ranking within a demo, not absolute skill measurement.
+Independent of cheat detection, each player gets an **A+ → F** grade per category (Combat / Reaction / Recoil / Grenades) plus an overall composite. Thresholds are calibrated to a wide Faceit L4–L10 player distribution; useful for relative ranking within a demo, not absolute skill measurement. The HTML report renders these as highlighted badges at the top of each player card.
 
 ---
 
 ## Extending With New Statistics
 
+Two ways to add to the analysis:
+
+**1. Add a new metric collector** (anything that reads the demo per-frame or via events and writes metrics):
+
 1. Implement the `stats.Collector` interface.
-2. Register your collector in `pkg/analyzer/analyzer.go`.
-3. Your metric appears in the per-player report automatically.
+2. Register your collector in `pkg/analyzer/analyzer.go`. Order matters — collectors that depend on others' final metrics must register after them. `CheatDetector` registers last.
+3. Your metric appears in the per-player text + HTML report automatically.
 
 ```go
 type MyStatsCollector struct {
@@ -106,7 +150,20 @@ func (c *MyStatsCollector) CollectFinalStats(demoStats *stats.DemoStats) {
 }
 ```
 
-See `pkg/stats/behavioral_collectors.go` for a richer example using event subscriptions.
+See `pkg/stats/behavioral_collectors.go` for a richer example using event subscriptions and per-player rolling history.
+
+**2. Add a new cheat-detection channel** (a signal that should feed the cheat-likelihood verdict):
+
+The scoring pipeline lives in `pkg/stats/cheatscore_*.go`:
+
+- `cheatscore_channel.go` — `Channel` struct, `Zone` enum, confidence helpers.
+- `cheatscore_channels.go` — one `evaluate*()` function per channel.
+- `cheatscore_combiner.go` — Bayesian log-odds combiner + lobby normalization.
+- `cheatscore_overrides.go` — Wingman / Competitive / position / stacking / floor / sniper rules.
+- `cheatscore_publish.go` — per-channel transparency keys under `anti_cheat`.
+- `cheatscore_score.go` — top-level `cheatscoreEvaluate(demoStats)` pipeline.
+
+Add a new `evaluateMyChannel()` returning a `Channel{ID, Score, Confidence, Raw, SampleN, Weight, Mode, HasData}`, append it to `evaluateChannelsForPlayer`, and the rest of the pipeline picks it up. Re-run `go test ./...` to keep the regression set green.
 
 ---
 
@@ -123,13 +180,13 @@ v2.0.0 upgraded to `demoinfocs-golang v5` for the new wire format. Use v2.x for 
 
 ## Philosophy
 
-Objective, transparent, extensible. Every verdict is backed by statistics you can read and tune — not a black box. Use as-is, adjust the weights, or treat as a baseline for ML-based detection.
+Objective, transparent, extensible. Every verdict is backed by statistics you can read and tune — not a black box. The Bayesian combiner is a deliberate replacement for a weighted sum: independent moderate signals are supposed to compound, and the per-channel confidence weights are honest about how much data each measurement actually has. Use as-is, adjust the weights, or treat as a baseline for ML-based detection.
 
 ---
 
 ## Contributing
 
-PRs and metric ideas welcome. Add a collector, document your math, show your work. If you tune the detector, keep `detector_test.go` green.
+PRs and metric ideas welcome. Add a collector or a channel, document your math, show your work. If you tune the detector, keep `detector_test.go` green — the regression set is the contract.
 
 ---
 
