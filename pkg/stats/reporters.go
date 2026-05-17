@@ -52,8 +52,15 @@ func (tr *TextReporter) Report(demoStats *DemoStats, categories []Category, writ
 	return nil
 }
 
-// reportCategory reports statistics for a specific category
+// reportCategory reports statistics for a specific category. The anti_cheat
+// category is special-cased to render as per-player blocks because it has
+// 30+ columns (10 channels × 3 keys each + boosts) which is unreadable in a
+// terminal-width table. Every other category keeps the wide-table layout.
 func (tr *TextReporter) reportCategory(demoStats *DemoStats, category Category, writer io.Writer) error {
+	if category == Category("anti_cheat") {
+		return tr.reportAntiCheatPerPlayer(demoStats, writer)
+	}
+
 	// Get all metrics to display for this category
 	displayKeys, hasData := tr.getDisplayKeys(demoStats, category)
 	if !hasData {
@@ -83,6 +90,132 @@ func (tr *TextReporter) reportCategory(demoStats *DemoStats, category Category, 
 	}
 
 	return nil
+}
+
+// reportAntiCheatPerPlayer renders the anti_cheat category as one block per
+// player. Each block shows: header (name + likelihood + flag), boosts/
+// overrides on a single line, then a compact 4-column channel table.
+func (tr *TextReporter) reportAntiCheatPerPlayer(demoStats *DemoStats, writer io.Writer) error {
+	fmt.Fprintln(writer, "\n=== Anti-Cheat ===")
+
+	players := tr.getSortedPlayers(demoStats, Category("anti_cheat"))
+	if len(players) == 0 {
+		return nil
+	}
+
+	for _, ps := range players {
+		// Skip the synthetic "Unknown" placeholder (sid 0).
+		if ps.Player.SteamID64 == 0 {
+			continue
+		}
+
+		likelihood := getMetricFloatValue(ps, Category("anti_cheat"), Key("cheat_likelihood"))
+		flag := ""
+		if m, ok := ps.GetMetric(Category("anti_cheat"), Key("cheater")); ok && m.StringValue == "Yes" {
+			flag = "  [FLAGGED]"
+		}
+
+		fmt.Fprintf(writer, "\n%s  (%d)  —  %.2f%%%s\n",
+			ps.Player.Name, ps.Player.SteamID64, likelihood, flag)
+
+		// Boosts and overrides on a single compact line so the reader can see
+		// the multipliers/floors that shaped the final score.
+		boostLine := tr.antiCheatBoostLine(ps)
+		if boostLine != "" {
+			fmt.Fprintf(writer, "  %s\n", boostLine)
+		}
+
+		// Compact per-channel table.
+		tr.writeChannelTable(writer, ps)
+	}
+	fmt.Fprintln(writer)
+	return nil
+}
+
+// antiCheatBoostLine builds a single-line summary of all non-channel
+// anti_cheat metrics — boosts, overrides, position discount.
+func (tr *TextReporter) antiCheatBoostLine(ps *PlayerStats) string {
+	parts := []string{}
+	add := func(label, val string) {
+		if val == "" || val == "-" {
+			return
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s", label, val))
+	}
+
+	if m, ok := ps.GetMetric(Category("anti_cheat"), Key("total_cheat_score")); ok {
+		add("Combined", fmt.Sprintf("%.2f", m.FloatValue))
+	}
+	if m, ok := ps.GetMetric(Category("anti_cheat"), Key("wingman_boost")); ok && m.StringValue == "Yes" {
+		reason := ""
+		if r, ok := ps.GetMetric(Category("anti_cheat"), Key("wingman_kpr_boost_reason")); ok {
+			reason = " (" + r.StringValue + ")"
+		}
+		add("Wingman", "×1.8"+reason)
+	}
+	if m, ok := ps.GetMetric(Category("anti_cheat"), Key("competitive_boost")); ok && m.StringValue == "Yes" {
+		add("Competitive", "×1.2")
+	}
+	if m, ok := ps.GetMetric(Category("anti_cheat"), Key("position_discount")); ok && m.FloatValue > 0 {
+		add("Position discount", fmt.Sprintf("-%.0f%%", m.FloatValue))
+	}
+	if m, ok := ps.GetMetric(Category("anti_cheat"), Key("evidence_stacking_boost")); ok && m.StringValue != "" {
+		add("Stacking", m.StringValue)
+	}
+	if m, ok := ps.GetMetric(Category("anti_cheat"), Key("ttd_sub100_high_floor")); ok && m.StringValue == "Yes" {
+		add("TTD-sub100 floor", "55%")
+	}
+	if m, ok := ps.GetMetric(Category("anti_cheat"), Key("sniper_wallbang_override")); ok && m.StringValue == "Yes" {
+		add("Sniper wallbang override", "100%")
+	}
+	if m, ok := ps.GetMetric(Category("anti_cheat"), Key("scout_precision_override")); ok && m.StringValue == "Yes" {
+		add("Scout precision override", "100%")
+	}
+
+	return strings.Join(parts, "   ")
+}
+
+// writeChannelTable writes a compact 4-column table of the 10 cheat-detection
+// channels: label | score | conf | zone. Channels with no data show "—".
+func (tr *TextReporter) writeChannelTable(writer io.Writer, ps *PlayerStats) {
+	const (
+		labelW = 26
+		numW   = 6
+		zoneW  = 8
+	)
+
+	fmt.Fprintf(writer, "  %-*s  %*s  %*s  %-*s\n",
+		labelW, "Channel", numW, "Score", numW, "Conf", zoneW, "Zone")
+	fmt.Fprintf(writer, "  %s\n", strings.Repeat("-", labelW+numW+numW+zoneW+6))
+
+	for _, cd := range channelDisplay {
+		score := 0.0
+		hasScore := false
+		if m, ok := ps.GetMetric(Category("anti_cheat"), channelScoreKey(cd.ID)); ok {
+			score = m.FloatValue
+			hasScore = true
+		}
+		conf := 0.0
+		if m, ok := ps.GetMetric(Category("anti_cheat"), Key(cd.ID+"_confidence")); ok {
+			conf = m.FloatValue
+		}
+		zone := ""
+		if m, ok := ps.GetMetric(Category("anti_cheat"), Key(cd.ID+"_zone")); ok {
+			zone = m.StringValue
+		}
+
+		scoreStr := "—"
+		confStr := "—"
+		zoneStr := "—"
+		if hasScore && zone != "" && zone != "no_data" {
+			scoreStr = fmt.Sprintf("%.2f", score)
+			confStr = fmt.Sprintf("%.2f", conf)
+			zoneStr = zone
+		}
+
+		fmt.Fprintf(writer, "  %-*s  %*s  %*s  %-*s\n",
+			labelW, cd.Label, numW, scoreStr, numW, confStr, zoneW, zoneStr)
+	}
 }
 
 // getDisplayKeys returns the keys to display for a category and whether there's data to show
