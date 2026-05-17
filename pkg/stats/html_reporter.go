@@ -75,12 +75,17 @@ type htmlScoreRow struct {
 }
 
 type htmlPlayer struct {
-	Name            string
-	SteamID         string
-	Likelihood      float64
-	LikelihoodClass string
-	Flagged         bool
-	Categories      []htmlCategory
+	Name              string
+	SteamID           string
+	Likelihood        float64
+	LikelihoodClass   string
+	Flagged           bool
+	OverallGrade      string
+	OverallGradeClass string
+	Grades            []htmlGrade
+	Channels          []htmlChannel
+	Boosts            []htmlMetric
+	Categories        []htmlCategory
 }
 
 type htmlCategory struct {
@@ -93,6 +98,27 @@ type htmlMetric struct {
 	Label string
 	Value string
 	Class string
+}
+
+// htmlGrade is one per-category grade badge displayed at the top of a player
+// card. Class controls the badge color (grade-a/b/c/d/f).
+type htmlGrade struct {
+	Title string
+	Grade string
+	Class string
+}
+
+// htmlChannel is one cheat-detection channel rendered as a single composite
+// row (score + confidence + zone) in the player card. Replaces the 3-rows-
+// per-channel anti_cheat layout that produced 30+ rows.
+type htmlChannel struct {
+	Label     string
+	ScorePct  string // e.g. "65%"
+	ConfPct   string // e.g. "58%"
+	Zone      string // clean | mild | strong | blatant | no_data
+	ZoneClass string // CSS class on the zone badge
+	ScoreBar  int    // 0..100, width of the score bar
+	HasData   bool
 }
 
 func buildHTMLData(ds *DemoStats) htmlData {
@@ -236,26 +262,215 @@ func buildPlayer(ps *PlayerStats) htmlPlayer {
 		flagged = true
 	}
 
+	grades, overall, overallClass := buildGrades(ps)
+	channels := buildChannels(ps)
+	boosts := buildAntiCheatBoosts(ps)
+
 	return htmlPlayer{
-		Name:            fallback(ps.Player.Name, "Unknown"),
-		SteamID:         fmt.Sprintf("%d", ps.Player.SteamID64),
-		Likelihood:      likelihood,
-		LikelihoodClass: likelihoodClass(likelihood),
-		Flagged:         flagged,
-		Categories:      buildCategories(ps),
+		Name:              fallback(ps.Player.Name, "Unknown"),
+		SteamID:           fmt.Sprintf("%d", ps.Player.SteamID64),
+		Likelihood:        likelihood,
+		LikelihoodClass:   likelihoodClass(likelihood),
+		Flagged:           flagged,
+		OverallGrade:      overall,
+		OverallGradeClass: overallClass,
+		Grades:            grades,
+		Channels:          channels,
+		Boosts:            boosts,
+		Categories:        buildCategories(ps),
 	}
 }
 
+// gradeCategories lists the categories whose `grade` metric should surface as
+// a highlighted badge at the top of the player card. The order is the order
+// the badges render in.
+var gradeCategories = []struct {
+	Cat   Category
+	Title string
+}{
+	{Category("kills"), "Combat"},
+	{Category("reaction"), "Reaction"},
+	{Category("recoil"), "Recoil"},
+	{Category("utility"), "Grenades"},
+}
+
+func buildGrades(ps *PlayerStats) (grades []htmlGrade, overall, overallClass string) {
+	for _, gc := range gradeCategories {
+		m, ok := ps.GetMetric(gc.Cat, Key("grade"))
+		if !ok || m.StringValue == "" || m.StringValue == "-" {
+			continue
+		}
+		grades = append(grades, htmlGrade{
+			Title: gc.Title,
+			Grade: m.StringValue,
+			Class: gradeClass(m.StringValue),
+		})
+	}
+	if m, ok := ps.GetMetric(Category("rating"), Key("overall")); ok && m.StringValue != "" && m.StringValue != "-" {
+		overall = m.StringValue
+		overallClass = gradeClass(m.StringValue)
+	}
+	return grades, overall, overallClass
+}
+
+func gradeClass(g string) string {
+	switch g {
+	case "A+", "A":
+		return "grade-a"
+	case "B+", "B":
+		return "grade-b"
+	case "C+", "C":
+		return "grade-c"
+	case "D":
+		return "grade-d"
+	default:
+		return "grade-f"
+	}
+}
+
+// channelDisplay lists the cheat-detection channels in render order. Each
+// renders as one composite row in the Channels section of the player card.
+var channelDisplay = []struct {
+	ID    string
+	Label string
+}{
+	{"hs", "Headshot %"},
+	{"snap", "Snap velocity"},
+	{"reaction", "P10 time-to-damage"},
+	{"ttd_sub100", "Sub-100 ms TTD"},
+	{"recoil", "Recoil control"},
+	{"pre_fov", "Pre-FOV pre-aim"},
+	{"pre_fov_presence", "Pre-FOV presence"},
+	{"decoupling", "Fight vs idle decoupling"},
+	{"attention", "Idle attention"},
+	{"back_killed", "Back-killed avoidance"},
+}
+
+// channelScoreKey maps a channel ID to the anti_cheat metric key holding its
+// 0–1 score. Legacy channels published under hs_score / snap_score /
+// reaction_score / recoil_score; new channels use <id>_score.
+func channelScoreKey(id string) Key {
+	switch id {
+	case "hs":
+		return Key("hs_score")
+	case "snap":
+		return Key("snap_score")
+	case "reaction":
+		return Key("reaction_score")
+	case "recoil":
+		return Key("recoil_score")
+	}
+	return Key(id + "_score")
+}
+
+func buildChannels(ps *PlayerStats) []htmlChannel {
+	out := make([]htmlChannel, 0, len(channelDisplay))
+	for _, cd := range channelDisplay {
+		score := 0.0
+		hasScore := false
+		if m, ok := ps.GetMetric(Category("anti_cheat"), channelScoreKey(cd.ID)); ok {
+			score = m.FloatValue
+			hasScore = true
+		}
+		conf := 0.0
+		if m, ok := ps.GetMetric(Category("anti_cheat"), Key(cd.ID+"_confidence")); ok {
+			conf = m.FloatValue
+		}
+		zone := ""
+		if m, ok := ps.GetMetric(Category("anti_cheat"), Key(cd.ID+"_zone")); ok {
+			zone = m.StringValue
+		}
+		hasData := hasScore && zone != "" && zone != "no_data"
+		row := htmlChannel{
+			Label:     cd.Label,
+			ScorePct:  fmt.Sprintf("%.0f%%", score*100),
+			ConfPct:   fmt.Sprintf("%.0f%%", conf*100),
+			Zone:      zoneLabel(zone),
+			ZoneClass: zoneClass(zone),
+			ScoreBar:  int(score * 100),
+			HasData:   hasData,
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// zoneLabel returns the human-readable label for a zone string.
+func zoneLabel(z string) string {
+	switch z {
+	case "clean":
+		return "Clean"
+	case "mild":
+		return "Mild"
+	case "strong":
+		return "Strong"
+	case "blatant":
+		return "Blatant"
+	default:
+		return "No data"
+	}
+}
+
+func zoneClass(z string) string {
+	switch z {
+	case "blatant", "strong":
+		return "zone-hot"
+	case "mild":
+		return "zone-warm"
+	case "clean":
+		return "zone-ok"
+	default:
+		return "zone-none"
+	}
+}
+
+// antiCheatBoostKeys lists anti_cheat metrics that are NOT per-channel and
+// should render in the "Boosts & overrides" strip at the bottom of the card.
+var antiCheatBoostKeys = []struct {
+	Key   Key
+	Label string
+}{
+	{Key("total_cheat_score"), "Combined score"},
+	{Key("wingman_boost"), "Wingman boost"},
+	{Key("wingman_kpr_boost_reason"), "Wingman boost reason"},
+	{Key("competitive_boost"), "Competitive boost"},
+	{Key("position_discount"), "Position discount"},
+	{Key("evidence_stacking_boost"), "Evidence stacking"},
+	{Key("ttd_sub100_high_floor"), "Sub-100ms TTD floor"},
+	{Key("sniper_wallbang_override"), "Sniper wallbang override"},
+	{Key("scout_precision_override"), "Scout precision override"},
+}
+
+func buildAntiCheatBoosts(ps *PlayerStats) []htmlMetric {
+	out := make([]htmlMetric, 0, len(antiCheatBoostKeys))
+	for _, b := range antiCheatBoostKeys {
+		m, ok := ps.GetMetric(Category("anti_cheat"), b.Key)
+		if !ok {
+			continue
+		}
+		val := formatMetricValue(m)
+		if val == "-" || val == "" {
+			continue
+		}
+		out = append(out, htmlMetric{
+			Label: b.Label,
+			Value: val,
+			Class: metricClass(Category("anti_cheat"), b.Key, m),
+		})
+	}
+	return out
+}
+
 // categoryDisplay defines render order and a friendly title for each known
-// category. Unknown categories get appended alphabetically with a title-cased
-// label.
+// category in the bottom categories grid. The anti_cheat and rating
+// categories are intentionally excluded — anti_cheat data renders in the
+// dedicated Channels + Boosts sections, and rating's grades render as the
+// highlighted badges at the top of the card.
 var categoryDisplay = []struct {
 	Key   Category
 	Title string
 	Note  string
 }{
-	{Category("rating"), "Skill Rating", ""},
-	{Category("anti_cheat"), "Score Breakdown", ""},
 	{Category("kills"), "Combat", ""},
 	{Category("aiming"), "Aim Snap", ""},
 	{Category("reaction"), "Reaction Time", ""},
@@ -270,8 +485,10 @@ var categoryDisplay = []struct {
 func buildCategories(ps *PlayerStats) []htmlCategory {
 	out := make([]htmlCategory, 0, len(categoryDisplay))
 	seen := make(map[Category]bool)
-	// scoreboard is rendered in its own section above the cards.
+	// scoreboard, anti_cheat, and rating render in their own card sections.
 	seen[scoreboardCategory] = true
+	seen[Category("anti_cheat")] = true
+	seen[Category("rating")] = true
 
 	for _, spec := range categoryDisplay {
 		seen[spec.Key] = true
@@ -334,6 +551,11 @@ func skipKey(cat Category, k Key) bool {
 	}
 	// The gauge + badge already represent these — skip in the breakdown table.
 	if cat == Category("anti_cheat") && (k == Key("cheat_likelihood") || k == Key("cheater")) {
+		return true
+	}
+	// Grade rows surface as highlighted badges at the top of the card; don't
+	// also list them inside the category metric tables.
+	if k == Key("grade") {
 		return true
 	}
 	return false

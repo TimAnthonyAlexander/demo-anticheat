@@ -103,10 +103,17 @@ h1 { font-size: 36px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.02em
 .likelihood-num.ok { color: var(--ok); }
 .likelihood-label { font-size: 11px; color: var(--faint); letter-spacing: 0.08em; }
 
+ 
 .categories {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 22px 32px;
+  columns: 3 220px;
+  column-gap: 32px;
+}
+.category {
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 22px;
+  display: block;
 }
 .category h3 {
   font-size: 11px;
@@ -136,6 +143,159 @@ h1 { font-size: 36px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.02em
 }
 .metric .v.hot { color: var(--flag); }
 .metric .v.warm { color: var(--warn); }
+
+ 
+.grades-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 22px;
+  padding: 18px 18px 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.grade-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 76px;
+  padding: 10px 12px 8px;
+  border-radius: 5px;
+  background: #1b1e22;
+  border: 1px solid var(--line);
+}
+.grade-pill .grade-title {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.grade-pill .grade-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.grade-pill.overall {
+  background: #20232a;
+  border: 1px solid var(--text);
+  margin-left: auto;
+  min-width: 96px;
+}
+.grade-pill.overall .grade-title { color: var(--text); }
+.grade-pill.overall .grade-value { font-size: 28px; }
+
+.grade-a .grade-value { color: var(--ok); }
+.grade-b .grade-value { color: #7ec894; }
+.grade-c .grade-value { color: var(--warn); }
+.grade-d .grade-value { color: #d97a4a; }
+.grade-f .grade-value { color: var(--flag); }
+
+ 
+.channels-block { margin-bottom: 22px; }
+.channels-block h3 {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+.channels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 6px 24px;
+}
+.channel {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.channel .ch-label { font-size: 13px; color: var(--dim); grid-column: 1; }
+.channel .ch-zone {
+  grid-column: 2;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  color: var(--faint);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.channel .ch-score {
+  grid-column: 3;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  color: var(--text);
+  min-width: 38px;
+  text-align: right;
+}
+.channel .ch-bar {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  height: 3px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.channel .ch-bar-fill {
+  height: 100%;
+  background: var(--dim);
+  border-radius: 2px;
+}
+.channel .ch-conf { grid-column: 3; grid-row: 2; font-size: 10px; color: var(--faint); text-align: right; margin-top: 4px; }
+
+.channel.no-data .ch-label { color: var(--faint); }
+.channel.no-data .ch-score { color: var(--faint); }
+.channel.no-data .ch-bar { display: none; }
+
+.zone-ok { color: var(--ok); border-color: var(--ok); }
+.zone-warm { color: var(--warn); border-color: var(--warn); }
+.zone-hot { color: var(--flag); border-color: var(--flag); }
+.channel .ch-zone.zone-hot ~ .ch-bar-fill,
+.channel.zone-hot-row .ch-bar-fill { background: var(--flag); }
+.channel.zone-warm-row .ch-bar-fill { background: var(--warn); }
+.channel.zone-ok-row .ch-bar-fill { background: var(--ok); }
+
+ 
+.boosts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.boost {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #1b1e22;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.boost .b-label { color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+.boost .b-value {
+  color: var(--text);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.boost .b-value.hot { color: var(--flag); }
+.boost .b-value.warm { color: var(--warn); }
 
 .empty { color: var(--faint); padding: 40px 0; }
 
@@ -167,7 +327,7 @@ footer a:hover { color: var(--text); }
 <div class="container">
   <header>
     <span class="name">demo-anticheat</span>
-    <span>2026-05-17 19:56:21 CEST</span>
+    <span>2026-05-17 20:02:28 CEST</span>
   </header>
 
   <h1>wallhack_trigger_ban_wingman.dem</h1>
@@ -290,205 +450,180 @@ footer a:hover { color: var(--text); }
           <div class="likelihood-label">flagged</div>
         </div>
       </div>
+
+      
+      <div class="grades-block">
+        
+        <div class="grade-pill grade-a">
+          <span class="grade-title">Combat</span>
+          <span class="grade-value">A&#43;</span>
+        </div>
+        
+        <div class="grade-pill grade-a">
+          <span class="grade-title">Reaction</span>
+          <span class="grade-value">A&#43;</span>
+        </div>
+        
+        <div class="grade-pill grade-c">
+          <span class="grade-title">Recoil</span>
+          <span class="grade-value">C&#43;</span>
+        </div>
+        
+        <div class="grade-pill grade-b">
+          <span class="grade-title">Grenades</span>
+          <span class="grade-value">B&#43;</span>
+        </div>
+        
+        
+        <div class="grade-pill overall grade-a">
+          <span class="grade-title">Overall</span>
+          <span class="grade-value">A</span>
+        </div>
+        
+      </div>
+      
+
+      
+      <div class="channels-block">
+        <h3>Cheat-detection channels</h3>
+        <div class="channels-grid">
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Headshot %</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">3%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 2%"></div></div>
+            <span class="ch-conf">conf 45%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Snap velocity</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">0%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 0%"></div></div>
+            <span class="ch-conf">conf 60%</span>
+            
+          </div>
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">P10 time-to-damage</span>
+            <span class="ch-zone zone-hot">Strong</span>
+            <span class="ch-score">62%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 62%"></div></div>
+            <span class="ch-conf">conf 55%</span>
+            
+          </div>
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">Sub-100 ms TTD</span>
+            <span class="ch-zone zone-hot">Strong</span>
+            <span class="ch-score">73%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 73%"></div></div>
+            <span class="ch-conf">conf 32%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Recoil control</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">0%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 0%"></div></div>
+            <span class="ch-conf">conf 55%</span>
+            
+          </div>
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">Pre-FOV pre-aim</span>
+            <span class="ch-zone zone-hot">Strong</span>
+            <span class="ch-score">65%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 64%"></div></div>
+            <span class="ch-conf">conf 58%</span>
+            
+          </div>
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">Pre-FOV presence</span>
+            <span class="ch-zone zone-hot">Blatant</span>
+            <span class="ch-score">83%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 83%"></div></div>
+            <span class="ch-conf">conf 100%</span>
+            
+          </div>
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">Fight vs idle decoupling</span>
+            <span class="ch-zone zone-hot">Blatant</span>
+            <span class="ch-score">100%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 100%"></div></div>
+            <span class="ch-conf">conf 58%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Idle attention</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">0%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 0%"></div></div>
+            <span class="ch-conf">conf 100%</span>
+            
+          </div>
+          
+          <div class="channel no-data ">
+            <span class="ch-label">Back-killed avoidance</span>
+            <span class="ch-zone zone-none">No data</span>
+            <span class="ch-score">0%</span>
+            
+          </div>
+          
+        </div>
+      </div>
+      
+
+      
+      <div class="boosts">
+        
+        <div class="boost">
+          <span class="b-label">Combined score</span>
+          <span class="b-value ">0.12</span>
+        </div>
+        
+        <div class="boost">
+          <span class="b-label">Wingman boost</span>
+          <span class="b-value hot">Yes</span>
+        </div>
+        
+        <div class="boost">
+          <span class="b-label">Wingman boost reason</span>
+          <span class="b-value ">KPR=1.12</span>
+        </div>
+        
+        <div class="boost">
+          <span class="b-label">Evidence stacking</span>
+          <span class="b-value ">Yes (4 strong channels)</span>
+        </div>
+        
+        <div class="boost">
+          <span class="b-label">Sub-100ms TTD floor</span>
+          <span class="b-value hot">Yes</span>
+        </div>
+        
+      </div>
+      
+
       <div class="categories">
         
         <div class="category">
-          <h3>Skill Rating</h3>
-          
-          <div class="metric">
-            <span class="k">Overall grade</span>
-            <span class="v ">A</span>
-          </div>
-          
-        </div>
-        
-        <div class="category">
-          <h3>Score Breakdown</h3>
-          
-          <div class="metric">
-            <span class="k">Combined score</span>
-            <span class="v ">0.12</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Headshot score</span>
-            <span class="v ">0.03</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction score</span>
-            <span class="v warm">0.62</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Score</span>
-            <span class="v hot">0.73</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Score</span>
-            <span class="v warm">0.65</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Score</span>
-            <span class="v hot">0.83</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Score</span>
-            <span class="v hot">1.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Wingman boost</span>
-            <span class="v hot">Yes</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Wingman Kpr Boost Reason</span>
-            <span class="v ">KPR=1.12</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Evidence Stacking Boost</span>
-            <span class="v ">Yes (4 strong channels)</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 High Floor</span>
-            <span class="v hot">Yes</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Confidence</span>
-            <span class="v ">1.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Confidence</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Zone</span>
-            <span class="v ">no_data</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Confidence</span>
-            <span class="v ">0.58</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Zone</span>
-            <span class="v ">blatant</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Hs Confidence</span>
-            <span class="v ">0.45</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Hs Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Confidence</span>
-            <span class="v ">0.58</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Confidence</span>
-            <span class="v ">1.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Zone</span>
-            <span class="v ">blatant</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Zone</span>
-            <span class="v ">strong</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction Confidence</span>
-            <span class="v ">0.55</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction Zone</span>
-            <span class="v ">strong</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil Confidence</span>
-            <span class="v ">0.55</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap Confidence</span>
-            <span class="v ">0.60</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Confidence</span>
-            <span class="v ">0.32</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Zone</span>
-            <span class="v ">strong</span>
-          </div>
-          
-        </div>
-        
-        <div class="category">
           <h3>Combat</h3>
-          
-          <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">A&#43;</span>
-          </div>
           
           <div class="metric">
             <span class="k">Total kills</span>
@@ -541,11 +676,6 @@ footer a:hover { color: var(--text); }
           <h3>Reaction Time</h3>
           
           <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">A&#43;</span>
-          </div>
-          
-          <div class="metric">
             <span class="k">TTD samples</span>
             <span class="v ">3</span>
           </div>
@@ -574,11 +704,6 @@ footer a:hover { color: var(--text); }
         
         <div class="category">
           <h3>Recoil Control</h3>
-          
-          <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">C&#43;</span>
-          </div>
           
           <div class="metric">
             <span class="k">Mean Angular Error</span>
@@ -676,11 +801,6 @@ footer a:hover { color: var(--text); }
           <h3>Grenades</h3>
           
           <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">B&#43;</span>
-          </div>
-          
-          <div class="metric">
             <span class="k">Thrown</span>
             <span class="v ">6</span>
           </div>
@@ -771,195 +891,154 @@ footer a:hover { color: var(--text); }
           <div class="likelihood-label">clear</div>
         </div>
       </div>
+
+      
+      <div class="grades-block">
+        
+        <div class="grade-pill grade-c">
+          <span class="grade-title">Combat</span>
+          <span class="grade-value">C</span>
+        </div>
+        
+        <div class="grade-pill grade-c">
+          <span class="grade-title">Recoil</span>
+          <span class="grade-value">C</span>
+        </div>
+        
+        
+        <div class="grade-pill overall grade-c">
+          <span class="grade-title">Overall</span>
+          <span class="grade-value">C</span>
+        </div>
+        
+      </div>
+      
+
+      
+      <div class="channels-block">
+        <h3>Cheat-detection channels</h3>
+        <div class="channels-grid">
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">Headshot %</span>
+            <span class="ch-zone zone-hot">Strong</span>
+            <span class="ch-score">58%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 58%"></div></div>
+            <span class="ch-conf">conf 15%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Snap velocity</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">0%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 0%"></div></div>
+            <span class="ch-conf">conf 20%</span>
+            
+          </div>
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">P10 time-to-damage</span>
+            <span class="ch-zone zone-hot">Strong</span>
+            <span class="ch-score">62%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 62%"></div></div>
+            <span class="ch-conf">conf 84%</span>
+            
+          </div>
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">Sub-100 ms TTD</span>
+            <span class="ch-zone zone-hot">Strong</span>
+            <span class="ch-score">73%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 73%"></div></div>
+            <span class="ch-conf">conf 100%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Recoil control</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">0%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 0%"></div></div>
+            <span class="ch-conf">conf 65%</span>
+            
+          </div>
+          
+          <div class="channel no-data ">
+            <span class="ch-label">Pre-FOV pre-aim</span>
+            <span class="ch-zone zone-none">No data</span>
+            <span class="ch-score">0%</span>
+            
+          </div>
+          
+          <div class="channel no-data ">
+            <span class="ch-label">Pre-FOV presence</span>
+            <span class="ch-zone zone-none">No data</span>
+            <span class="ch-score">0%</span>
+            
+          </div>
+          
+          <div class="channel no-data ">
+            <span class="ch-label">Fight vs idle decoupling</span>
+            <span class="ch-zone zone-none">No data</span>
+            <span class="ch-score">0%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Idle attention</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">1%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 1%"></div></div>
+            <span class="ch-conf">conf 100%</span>
+            
+          </div>
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">Back-killed avoidance</span>
+            <span class="ch-zone zone-hot">Blatant</span>
+            <span class="ch-score">85%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 84%"></div></div>
+            <span class="ch-conf">conf 62%</span>
+            
+          </div>
+          
+        </div>
+      </div>
+      
+
+      
+      <div class="boosts">
+        
+        <div class="boost">
+          <span class="b-label">Combined score</span>
+          <span class="b-value ">0.12</span>
+        </div>
+        
+        <div class="boost">
+          <span class="b-label">Position discount</span>
+          <span class="b-value ">20.00%</span>
+        </div>
+        
+        <div class="boost">
+          <span class="b-label">Evidence stacking</span>
+          <span class="b-value ">Yes (3 strong channels)</span>
+        </div>
+        
+      </div>
+      
+
       <div class="categories">
         
         <div class="category">
-          <h3>Skill Rating</h3>
-          
-          <div class="metric">
-            <span class="k">Overall grade</span>
-            <span class="v ">C</span>
-          </div>
-          
-        </div>
-        
-        <div class="category">
-          <h3>Score Breakdown</h3>
-          
-          <div class="metric">
-            <span class="k">Combined score</span>
-            <span class="v ">0.12</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Headshot score</span>
-            <span class="v warm">0.58</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction score</span>
-            <span class="v warm">0.62</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Score</span>
-            <span class="v hot">0.73</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Score</span>
-            <span class="v ">0.01</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Score</span>
-            <span class="v hot">0.85</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Position discount</span>
-            <span class="v ">20.00%</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Evidence Stacking Boost</span>
-            <span class="v ">Yes (3 strong channels)</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Confidence</span>
-            <span class="v ">1.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Confidence</span>
-            <span class="v ">0.62</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Zone</span>
-            <span class="v ">blatant</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Confidence</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Zone</span>
-            <span class="v ">no_data</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Hs Confidence</span>
-            <span class="v ">0.15</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Hs Zone</span>
-            <span class="v ">strong</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Confidence</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Confidence</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Zone</span>
-            <span class="v ">no_data</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Zone</span>
-            <span class="v ">no_data</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction Confidence</span>
-            <span class="v ">0.84</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction Zone</span>
-            <span class="v ">strong</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil Confidence</span>
-            <span class="v ">0.65</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap Confidence</span>
-            <span class="v ">0.20</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Confidence</span>
-            <span class="v ">1.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Zone</span>
-            <span class="v ">strong</span>
-          </div>
-          
-        </div>
-        
-        <div class="category">
           <h3>Combat</h3>
-          
-          <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">C</span>
-          </div>
           
           <div class="metric">
             <span class="k">Total kills</span>
@@ -1040,11 +1119,6 @@ footer a:hover { color: var(--text); }
         
         <div class="category">
           <h3>Recoil Control</h3>
-          
-          <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">C</span>
-          </div>
           
           <div class="metric">
             <span class="k">Mean Angular Error</span>
@@ -1232,195 +1306,159 @@ footer a:hover { color: var(--text); }
           <div class="likelihood-label">clear</div>
         </div>
       </div>
+
+      
+      <div class="grades-block">
+        
+        <div class="grade-pill grade-d">
+          <span class="grade-title">Combat</span>
+          <span class="grade-value">D</span>
+        </div>
+        
+        <div class="grade-pill grade-a">
+          <span class="grade-title">Reaction</span>
+          <span class="grade-value">A&#43;</span>
+        </div>
+        
+        <div class="grade-pill grade-c">
+          <span class="grade-title">Recoil</span>
+          <span class="grade-value">C&#43;</span>
+        </div>
+        
+        
+        <div class="grade-pill overall grade-b">
+          <span class="grade-title">Overall</span>
+          <span class="grade-value">B</span>
+        </div>
+        
+      </div>
+      
+
+      
+      <div class="channels-block">
+        <h3>Cheat-detection channels</h3>
+        <div class="channels-grid">
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Headshot %</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">0%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 0%"></div></div>
+            <span class="ch-conf">conf 15%</span>
+            
+          </div>
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">Snap velocity</span>
+            <span class="ch-zone zone-hot">Blatant</span>
+            <span class="ch-score">100%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 100%"></div></div>
+            <span class="ch-conf">conf 30%</span>
+            
+          </div>
+          
+          <div class="channel  zone-warm-row">
+            <span class="ch-label">P10 time-to-damage</span>
+            <span class="ch-zone zone-warm">Mild</span>
+            <span class="ch-score">44%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 43%"></div></div>
+            <span class="ch-conf">conf 84%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Sub-100 ms TTD</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">0%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 0%"></div></div>
+            <span class="ch-conf">conf 48%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Recoil control</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">0%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 0%"></div></div>
+            <span class="ch-conf">conf 45%</span>
+            
+          </div>
+          
+          <div class="channel no-data ">
+            <span class="ch-label">Pre-FOV pre-aim</span>
+            <span class="ch-zone zone-none">No data</span>
+            <span class="ch-score">0%</span>
+            
+          </div>
+          
+          <div class="channel no-data ">
+            <span class="ch-label">Pre-FOV presence</span>
+            <span class="ch-zone zone-none">No data</span>
+            <span class="ch-score">0%</span>
+            
+          </div>
+          
+          <div class="channel no-data ">
+            <span class="ch-label">Fight vs idle decoupling</span>
+            <span class="ch-zone zone-none">No data</span>
+            <span class="ch-score">0%</span>
+            
+          </div>
+          
+          <div class="channel  zone-warm-row">
+            <span class="ch-label">Idle attention</span>
+            <span class="ch-zone zone-warm">Mild</span>
+            <span class="ch-score">42%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 41%"></div></div>
+            <span class="ch-conf">conf 100%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Back-killed avoidance</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">23%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 22%"></div></div>
+            <span class="ch-conf">conf 75%</span>
+            
+          </div>
+          
+        </div>
+      </div>
+      
+
+      
+      <div class="boosts">
+        
+        <div class="boost">
+          <span class="b-label">Combined score</span>
+          <span class="b-value ">0.10</span>
+        </div>
+        
+        <div class="boost">
+          <span class="b-label">Position discount</span>
+          <span class="b-value ">6.67%</span>
+        </div>
+        
+        <div class="boost">
+          <span class="b-label">Evidence stacking</span>
+          <span class="b-value ">Yes (3 strong channels)</span>
+        </div>
+        
+      </div>
+      
+
       <div class="categories">
         
         <div class="category">
-          <h3>Skill Rating</h3>
-          
-          <div class="metric">
-            <span class="k">Overall grade</span>
-            <span class="v ">B</span>
-          </div>
-          
-        </div>
-        
-        <div class="category">
-          <h3>Score Breakdown</h3>
-          
-          <div class="metric">
-            <span class="k">Combined score</span>
-            <span class="v ">0.10</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Headshot score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap score</span>
-            <span class="v hot">1.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction score</span>
-            <span class="v warm">0.44</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Score</span>
-            <span class="v warm">0.42</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Score</span>
-            <span class="v ">0.23</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Position discount</span>
-            <span class="v ">6.67%</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Evidence Stacking Boost</span>
-            <span class="v ">Yes (3 strong channels)</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Confidence</span>
-            <span class="v ">1.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Zone</span>
-            <span class="v ">mild</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Confidence</span>
-            <span class="v ">0.75</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Confidence</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Zone</span>
-            <span class="v ">no_data</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Hs Confidence</span>
-            <span class="v ">0.15</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Hs Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Confidence</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Confidence</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Zone</span>
-            <span class="v ">no_data</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Zone</span>
-            <span class="v ">no_data</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction Confidence</span>
-            <span class="v ">0.84</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction Zone</span>
-            <span class="v ">mild</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil Confidence</span>
-            <span class="v ">0.45</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap Confidence</span>
-            <span class="v ">0.30</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap Zone</span>
-            <span class="v ">blatant</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Confidence</span>
-            <span class="v ">0.48</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-        </div>
-        
-        <div class="category">
           <h3>Combat</h3>
-          
-          <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">D</span>
-          </div>
           
           <div class="metric">
             <span class="k">Total kills</span>
@@ -1473,11 +1511,6 @@ footer a:hover { color: var(--text); }
           <h3>Reaction Time</h3>
           
           <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">A&#43;</span>
-          </div>
-          
-          <div class="metric">
             <span class="k">TTD samples</span>
             <span class="v ">7</span>
           </div>
@@ -1506,11 +1539,6 @@ footer a:hover { color: var(--text); }
         
         <div class="category">
           <h3>Recoil Control</h3>
-          
-          <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">C&#43;</span>
-          </div>
           
           <div class="metric">
             <span class="k">Mean Angular Error</span>
@@ -1643,190 +1671,154 @@ footer a:hover { color: var(--text); }
           <div class="likelihood-label">clear</div>
         </div>
       </div>
+
+      
+      <div class="grades-block">
+        
+        <div class="grade-pill grade-c">
+          <span class="grade-title">Combat</span>
+          <span class="grade-value">C</span>
+        </div>
+        
+        <div class="grade-pill grade-a">
+          <span class="grade-title">Reaction</span>
+          <span class="grade-value">A&#43;</span>
+        </div>
+        
+        <div class="grade-pill grade-c">
+          <span class="grade-title">Recoil</span>
+          <span class="grade-value">C&#43;</span>
+        </div>
+        
+        
+        <div class="grade-pill overall grade-b">
+          <span class="grade-title">Overall</span>
+          <span class="grade-value">B</span>
+        </div>
+        
+      </div>
+      
+
+      
+      <div class="channels-block">
+        <h3>Cheat-detection channels</h3>
+        <div class="channels-grid">
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Headshot %</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">0%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 0%"></div></div>
+            <span class="ch-conf">conf 20%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Snap velocity</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">0%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 0%"></div></div>
+            <span class="ch-conf">conf 40%</span>
+            
+          </div>
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">P10 time-to-damage</span>
+            <span class="ch-zone zone-hot">Strong</span>
+            <span class="ch-score">62%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 62%"></div></div>
+            <span class="ch-conf">conf 71%</span>
+            
+          </div>
+          
+          <div class="channel  zone-hot-row">
+            <span class="ch-label">Sub-100 ms TTD</span>
+            <span class="ch-zone zone-hot">Strong</span>
+            <span class="ch-score">73%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 73%"></div></div>
+            <span class="ch-conf">conf 100%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Recoil control</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">0%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 0%"></div></div>
+            <span class="ch-conf">conf 100%</span>
+            
+          </div>
+          
+          <div class="channel no-data ">
+            <span class="ch-label">Pre-FOV pre-aim</span>
+            <span class="ch-zone zone-none">No data</span>
+            <span class="ch-score">0%</span>
+            
+          </div>
+          
+          <div class="channel no-data ">
+            <span class="ch-label">Pre-FOV presence</span>
+            <span class="ch-zone zone-none">No data</span>
+            <span class="ch-score">0%</span>
+            
+          </div>
+          
+          <div class="channel no-data ">
+            <span class="ch-label">Fight vs idle decoupling</span>
+            <span class="ch-zone zone-none">No data</span>
+            <span class="ch-score">0%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Idle attention</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">10%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 9%"></div></div>
+            <span class="ch-conf">conf 100%</span>
+            
+          </div>
+          
+          <div class="channel  zone-ok-row">
+            <span class="ch-label">Back-killed avoidance</span>
+            <span class="ch-zone zone-ok">Clean</span>
+            <span class="ch-score">23%</span>
+            
+            <div class="ch-bar"><div class="ch-bar-fill" style="width: 22%"></div></div>
+            <span class="ch-conf">conf 75%</span>
+            
+          </div>
+          
+        </div>
+      </div>
+      
+
+      
+      <div class="boosts">
+        
+        <div class="boost">
+          <span class="b-label">Combined score</span>
+          <span class="b-value ">0.10</span>
+        </div>
+        
+        <div class="boost">
+          <span class="b-label">Position discount</span>
+          <span class="b-value ">13.33%</span>
+        </div>
+        
+      </div>
+      
+
       <div class="categories">
         
         <div class="category">
-          <h3>Skill Rating</h3>
-          
-          <div class="metric">
-            <span class="k">Overall grade</span>
-            <span class="v ">B</span>
-          </div>
-          
-        </div>
-        
-        <div class="category">
-          <h3>Score Breakdown</h3>
-          
-          <div class="metric">
-            <span class="k">Combined score</span>
-            <span class="v ">0.10</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Headshot score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction score</span>
-            <span class="v warm">0.62</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Score</span>
-            <span class="v hot">0.73</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Score</span>
-            <span class="v ">0.10</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Score</span>
-            <span class="v ">0.23</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Score</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Position discount</span>
-            <span class="v ">13.33%</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Confidence</span>
-            <span class="v ">1.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Attention Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Confidence</span>
-            <span class="v ">0.75</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Back Killed Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Confidence</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Decoupling Zone</span>
-            <span class="v ">no_data</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Hs Confidence</span>
-            <span class="v ">0.20</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Hs Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Confidence</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Confidence</span>
-            <span class="v ">0.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Presence Zone</span>
-            <span class="v ">no_data</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Pre Fov Zone</span>
-            <span class="v ">no_data</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction Confidence</span>
-            <span class="v ">0.71</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Reaction Zone</span>
-            <span class="v ">strong</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil Confidence</span>
-            <span class="v ">1.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Recoil Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap Confidence</span>
-            <span class="v ">0.40</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Snap Zone</span>
-            <span class="v ">clean</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Confidence</span>
-            <span class="v ">1.00</span>
-          </div>
-          
-          <div class="metric">
-            <span class="k">Ttd Sub100 Zone</span>
-            <span class="v ">strong</span>
-          </div>
-          
-        </div>
-        
-        <div class="category">
           <h3>Combat</h3>
-          
-          <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">C</span>
-          </div>
           
           <div class="metric">
             <span class="k">Total kills</span>
@@ -1879,11 +1871,6 @@ footer a:hover { color: var(--text); }
           <h3>Reaction Time</h3>
           
           <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">A&#43;</span>
-          </div>
-          
-          <div class="metric">
             <span class="k">TTD samples</span>
             <span class="v ">5</span>
           </div>
@@ -1912,11 +1899,6 @@ footer a:hover { color: var(--text); }
         
         <div class="category">
           <h3>Recoil Control</h3>
-          
-          <div class="metric">
-            <span class="k">Grade</span>
-            <span class="v ">C&#43;</span>
-          </div>
           
           <div class="metric">
             <span class="k">Mean Angular Error</span>
@@ -2068,7 +2050,7 @@ footer a:hover { color: var(--text); }
 
   <footer>
     <span>Generated by <a href="https://github.com/timanthonyalexander/demo-anticheat">demo-anticheat</a></span>
-    <span>4 players · 305 metrics</span>
+    <span>4 players · 156 metrics</span>
   </footer>
 </div>
 </body>
