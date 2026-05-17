@@ -38,6 +38,10 @@ Or grab a prebuilt binary from the [latest release](https://github.com/TimAnthon
 ./demo-anticheat analyze path/to/demo.dem
 ```
 
+![CLI report](docs/report_cli.png)
+
+The terminal output above is the default rendering for an analyzed cheater demo — the flagged player's card is bordered in red, each detection channel shows a colored score bar with its confidence and zone, skill grades render as inline badges, and the boost/override strip explains every adjustment that shaped the final likelihood. Output auto-degrades to plain ASCII when piped or redirected, and honors `NO_COLOR`.
+
 ### HTML Report
 
 Pass `--html` (or set `DEMOANTICHEAT_HTML=1`) to also write a self-contained `index.html` next to the text output.
@@ -48,7 +52,7 @@ Pass `--html` (or set `DEMOANTICHEAT_HTML=1`) to also write a self-contained `in
 
 ![Report](docs/report.png)
 
-A sample report from `demos/walls_wingman.dem` is committed at [`index.html`](./index.html). View it rendered via [htmlpreview](https://htmlpreview.github.io/?https://github.com/timanthonyalexander/demo-anticheat/blob/master/index.html), or download the raw file and open it directly — it's a single self-contained file with no JS or external assets.
+A sample report from a cheater demo is committed at [`index.html`](./index.html). View it rendered via [htmlpreview](https://htmlpreview.github.io/?https://github.com/timanthonyalexander/demo-anticheat/blob/master/index.html), or download the raw file and open it directly — it's a single self-contained file with no JS or external assets.
 
 ---
 
