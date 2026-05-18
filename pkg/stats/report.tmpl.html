@@ -199,6 +199,19 @@ h1 { font-size: 36px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.02em
 .grade-d .grade-value { color: #d97a4a; }
 .grade-f .grade-value { color: var(--flag); }
 
+/* === Narrative paragraph =============================================== */
+.narrative {
+  margin: 0 0 22px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid var(--line);
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+.flagged .narrative { border-left-color: var(--flag); }
+
 /* === Channels (cheat-detection breakdown) ============================== */
 .channels-block { margin-bottom: 22px; }
 .channels-block h3 {
@@ -418,6 +431,10 @@ footer a:hover { color: var(--text); }
         </div>
         {{end}}
       </div>
+      {{end}}
+
+      {{if .Narrative}}
+      <p class="narrative">{{.Narrative}}</p>
       {{end}}
 
       {{if .Channels}}

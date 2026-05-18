@@ -40,7 +40,7 @@ func (z Zone) String() string {
 //
 //   - bidirectional: a "clean" reading produces negative log-odds (genuine
 //     evidence the player is not cheating). Use for graded metrics like HS%
-//     or P10 TTD where below-clean values legitimately exonerate.
+//     or median TTD where below-clean values legitimately exonerate.
 //   - positiveOnly: a "clean" reading contributes 0; only suspicious readings
 //     shift the score upward. Use for detector-style metrics like snap
 //     velocity or recoil MAE — a clean snap doesn't prove anything.

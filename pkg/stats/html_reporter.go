@@ -83,6 +83,7 @@ type htmlPlayer struct {
 	OverallGrade      string
 	OverallGradeClass string
 	Grades            []htmlGrade
+	Narrative         string
 	Channels          []htmlChannel
 	Boosts            []htmlMetric
 	Categories        []htmlCategory
@@ -275,6 +276,7 @@ func buildPlayer(ps *PlayerStats) htmlPlayer {
 		OverallGrade:      overall,
 		OverallGradeClass: overallClass,
 		Grades:            grades,
+		Narrative:         buildCheatscoreNarrative(ps),
 		Channels:          channels,
 		Boosts:            boosts,
 		Categories:        buildCategories(ps),

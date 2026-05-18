@@ -83,21 +83,30 @@ func evaluateSnap(ps *PlayerStats) Channel {
 	}
 }
 
-// evaluateTTDP10 scores P10 time-to-damage. Ramp 400→100 ms, n_full=10,
-// sqrt confidence. Bidirectional: a 600ms P10 on many samples is real
-// evidence of human-level reactions.
-func evaluateTTDP10(ps *PlayerStats) Channel {
+// evaluateReactionMedianTTD scores median time-to-damage. Ramp 500→150 ms,
+// n_full=10, sqrt confidence. Bidirectional: a 500ms median on many samples
+// is real evidence of human-paced reactions.
+//
+// Switched from P10 TTD to median TTD on 2026-05-18 — the docs/METRICS.md
+// research highlights median TTD as the "well-established" published signal
+// (Leetify Public Data Library): clean median 500–600ms (Premier 5–15k),
+// suspicious <250ms, blatant <150ms. P10 was too noisy because a single
+// pre-fired tick (legitimate in CS2 via audio cues, pre-armed peeks, or
+// callouts) produces a sub-100ms P10 without indicating any cheat behavior.
+// The median averages across the player's whole engagement distribution and
+// only registers when a CONSISTENT pattern of fast reactions exists.
+func evaluateReactionMedianTTD(ps *PlayerStats) Channel {
 	n, hasN := psGetInt(ps, channelCategoryReaction, Key("ttd_samples"))
 	if !hasN || n <= 0 {
 		return Channel{ID: "reaction", Weight: 0.10, Mode: bidirectional}
 	}
-	p10, _ := psGetFloat(ps, channelCategoryReaction, Key("p10_ttd"))
-	score := linearScore(p10, 400.0, 100.0) // descending ramp: low ms → high score
+	median, _ := psGetFloat(ps, channelCategoryReaction, Key("median_ttd"))
+	score := linearScore(median, 500.0, 150.0) // descending: low ms → high score
 	return Channel{
 		ID:         "reaction",
 		Score:      score,
 		Confidence: sqrtConfidence(n, 10),
-		Raw:        p10,
+		Raw:        median,
 		SampleN:    n,
 		Weight:     0.10,
 		Zone:       zoneFor(score),
@@ -279,7 +288,7 @@ func evaluateChannelsForPlayer(ps *PlayerStats) []Channel {
 	return []Channel{
 		evaluateHS(ps),
 		evaluateSnap(ps),
-		evaluateTTDP10(ps),
+		evaluateReactionMedianTTD(ps),
 		evaluateTTDSub100(ps),
 		evaluateRecoil(ps),
 		evaluatePreFOV(ps),
