@@ -49,6 +49,7 @@ func cheatscoreEvaluate(demoStats *DemoStats) {
 		score, competitiveApplied := applyCompetitiveBoost(score, ps)
 		score, discount := applyPositionDiscount(score, ps)
 		score, stackApplied, stackCount := applyEvidenceStacking(score, channels)
+		score, coOccurApplied := applyWallhackCoOccurrenceBoost(score, channels, ps)
 		score, floorApplied := applyTTDSub100Floor(score, ps, asymBySID[sid])
 		if score > 100.0 {
 			score = 100.0
@@ -56,17 +57,18 @@ func cheatscoreEvaluate(demoStats *DemoStats) {
 		score, sniperOverrides := applySniperOverrides(score, ps)
 
 		cheatscorePublish(ps, publishOptions{
-			channels:              channels,
-			combined:              combined,
-			wingmanBoosted:        wingmanApplied,
-			wingmanReason:         wingmanReason,
-			competitiveBoost:      competitiveApplied,
-			positionDiscount:      discount,
-			evidenceStacking:      stackApplied,
-			evidenceStackingCount: stackCount,
-			ttdSub100Floor:        floorApplied,
-			sniperOverrides:       sniperOverrides,
-			finalLikelihood:       score,
+			channels:                channels,
+			combined:                combined,
+			wingmanBoosted:          wingmanApplied,
+			wingmanReason:           wingmanReason,
+			competitiveBoost:        competitiveApplied,
+			positionDiscount:        discount,
+			evidenceStacking:        stackApplied,
+			evidenceStackingCount:   stackCount,
+			coOccurrenceBoost:       coOccurApplied,
+			ttdSub100Floor:          floorApplied,
+			sniperOverrides:         sniperOverrides,
+			finalLikelihood:         score,
 		})
 	}
 }

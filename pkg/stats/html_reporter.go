@@ -436,6 +436,7 @@ var antiCheatBoostKeys = []struct {
 	{Key("competitive_boost"), "Competitive boost"},
 	{Key("position_discount"), "Position discount"},
 	{Key("evidence_stacking_boost"), "Evidence stacking"},
+	{Key("wallhack_co_occurrence_boost"), "Wallhack co-occurrence"},
 	{Key("ttd_sub100_high_floor"), "Sub-100ms TTD floor"},
 	{Key("sniper_wallbang_override"), "Sniper wallbang override"},
 	{Key("scout_precision_override"), "Scout precision override"},

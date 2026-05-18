@@ -70,21 +70,25 @@ type BehavioralCollector struct {
 	history map[uint64][]playerSnapshot
 
 	// Per-player accumulators.
-	backKillTotal map[uint64]int
-	backKillBack  map[uint64]int
-	preFOVAngles  map[uint64][]float64
-	attentionMin  map[uint64][]float64
+	backKillTotal      map[uint64]int // total deaths charged to this player as victim
+	backKillBack       map[uint64]int // deaths where victim was looking away from killer
+	backKillGivenTotal map[uint64]int // total kills charged to this player as killer
+	backKillGivenBack  map[uint64]int // kills where victim was looking away from this killer
+	preFOVAngles       map[uint64][]float64
+	attentionMin       map[uint64][]float64
 }
 
 // NewBehavioralCollector creates a new BehavioralCollector.
 func NewBehavioralCollector() *BehavioralCollector {
 	return &BehavioralCollector{
-		BaseCollector: NewBaseCollector("Behavioral Wallhack Signals", Category("behavioral")),
-		history:       make(map[uint64][]playerSnapshot),
-		backKillTotal: make(map[uint64]int),
-		backKillBack:  make(map[uint64]int),
-		preFOVAngles:  make(map[uint64][]float64),
-		attentionMin:  make(map[uint64][]float64),
+		BaseCollector:      NewBaseCollector("Behavioral Wallhack Signals", Category("behavioral")),
+		history:            make(map[uint64][]playerSnapshot),
+		backKillTotal:      make(map[uint64]int),
+		backKillBack:       make(map[uint64]int),
+		backKillGivenTotal: make(map[uint64]int),
+		backKillGivenBack:  make(map[uint64]int),
+		preFOVAngles:       make(map[uint64][]float64),
+		attentionMin:       make(map[uint64][]float64),
 	}
 }
 
@@ -184,15 +188,23 @@ func (bc *BehavioralCollector) handleKill(e events.Kill) {
 	killerID := e.Killer.SteamID64
 	victimID := e.Victim.SteamID64
 
-	// --- Back-kill metric (charged to the VICTIM) --------------------
+	// --- Back-kill metric (charged to both sides) --------------------
 	// Was the victim looking away from the killer at the moment of death?
+	// The same yes/no answer counts as evidence on opposite directions:
+	//   - victim side: high rate = unaware = clean (or info-cheater?)
+	//                  low rate = always-aware = wallhack-suspicious
+	//   - killer side: high rate = kills mostly from behind = could mean either
+	//                  preferred flanking style OR a wallhacker exploiting
+	//                  positional info to approach unseen.
 	killerPos := e.Killer.Position()
 	victimPos := e.Victim.Position()
 	victimView := viewDirectionToVector(float64(e.Victim.ViewDirectionX()), float64(e.Victim.ViewDirectionY()))
 	angVictimToKiller := angleBetweenViewAndTarget(victimView, victimPos.X, victimPos.Y, victimPos.Z, killerPos.X, killerPos.Y, killerPos.Z)
 	bc.backKillTotal[victimID]++
+	bc.backKillGivenTotal[killerID]++
 	if angVictimToKiller >= backKillThresholdDeg {
 		bc.backKillBack[victimID]++
+		bc.backKillGivenBack[killerID]++
 	}
 
 	// --- Pre-FOV pre-aim metric (charged to the KILLER) -------------
@@ -271,7 +283,7 @@ func (bc *BehavioralCollector) handleKill(e events.Kill) {
 // CollectFinalStats publishes the per-player aggregates as metrics.
 func (bc *BehavioralCollector) CollectFinalStats(demoStats *DemoStats) {
 	for sid, ps := range demoStats.Players {
-		// --- Back-kill rate -----------------------------------------
+		// --- Back-kill rate (victim side) ---------------------------
 		if total := bc.backKillTotal[sid]; total >= minBackKillSamples {
 			back := bc.backKillBack[sid]
 			rate := float64(back) / float64(total)
@@ -284,6 +296,32 @@ func (bc *BehavioralCollector) CollectFinalStats(demoStats *DemoStats) {
 				Type:        MetricInteger,
 				IntValue:    int64(total),
 				Description: "Total deaths used for back-kill rate",
+			})
+		}
+
+		// --- Back-kill rate (killer side) ---------------------------
+		// Diagnostic metric: kills where the victim was looking away from
+		// the killer. Not currently fed into the cheat-score combiner —
+		// flanking is a legitimate playstyle and the false-positive rate
+		// for elevated rates here would dwarf the signal. Tracked so it
+		// can be inspected per player.
+		if total := bc.backKillGivenTotal[sid]; total >= minBackKillSamples {
+			back := bc.backKillGivenBack[sid]
+			rate := float64(back) / float64(total)
+			ps.AddMetric(Category("behavioral"), Key("back_kill_given_pct"), Metric{
+				Type:        MetricPercentage,
+				FloatValue:  rate * 100.0,
+				Description: "Percent of own kills where the victim was looking away from this player (high = flanking or info exploit)",
+			})
+			ps.AddMetric(Category("behavioral"), Key("back_kill_given_count"), Metric{
+				Type:        MetricInteger,
+				IntValue:    int64(back),
+				Description: "Number of own kills where the victim was looking away",
+			})
+			ps.AddMetric(Category("behavioral"), Key("back_kill_given_total_kills"), Metric{
+				Type:        MetricInteger,
+				IntValue:    int64(total),
+				Description: "Total kills used for back-kill-given rate",
 			})
 		}
 

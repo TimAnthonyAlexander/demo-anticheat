@@ -20,6 +20,7 @@ type publishOptions struct {
 
 	evidenceStacking      bool
 	evidenceStackingCount int
+	coOccurrenceBoost     bool
 	ttdSub100Floor        bool
 
 	sniperOverrides []string
@@ -136,6 +137,14 @@ func cheatscorePublish(ps *PlayerStats, opt publishOptions) {
 			Type:        MetricString,
 			StringValue: "Yes",
 			Description: "Score floored at 55% — sub-100ms TTD rate ≥25% with ≥3 samples",
+		})
+	}
+
+	if opt.coOccurrenceBoost {
+		ps.AddMetric(cheatscoreCategoryAntiCheat, Key("wallhack_co_occurrence_boost"), Metric{
+			Type:        MetricString,
+			StringValue: "Yes",
+			Description: "×1.2 boost — pre-FOV pre-aim AND back-kill-given both elevated",
 		})
 	}
 

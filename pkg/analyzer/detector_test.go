@@ -42,12 +42,18 @@ var (
 		76561199379706605: "RUSSIAMBOLA",
 		76561199619577369: "--",
 	}
+	// KGP vs Crystal Club tournament: szpont was banned post-match.
+	// All other 9 players treated as clean for separation tests.
+	kgpCheaters = map[uint64]string{
+		76561199039310400: "szpont",
+	}
 )
 
 const (
 	wingmanDemoPath = "../../demos/walls_wingman.dem"
 	reactDemoPath   = "../../demos/wallhack_trigger_ban_wingman.dem"
 	ancientDemoPath = "/Users/tim.alexander/Downloads/2026-05-10_13-38-29_1_de_ancient_SHADE_vs_Kultywator_Stara_Krobia.dem"
+	kgpDemoPath     = "../../demos/2026-04-17_xx-xx-xx_x_de_anubis_KGP_vs_Crystal_Club.dem"
 
 	// Required separation between the lowest-scoring known cheater and the
 	// highest-scoring known clean player. Keeps tuning honest — we want a
@@ -106,6 +112,75 @@ func dumpRanked(t *testing.T, label string, scores map[uint64]playerScore, cheat
 			tag = " [CHEATER]"
 		}
 		t.Logf("  %6.2f%%  %s%s", s.likelihood, s.name, tag)
+	}
+}
+
+// TestDetector_DumpBackKillGiven is diagnostic-only; dumps the killer-side
+// back-kill metric for every player in every ground-truth demo. Run with
+// `go test ./pkg/analyzer/ -run TestDetector_DumpBackKillGiven -v` to see
+// who is racking up kills against unaware opponents.
+func TestDetector_DumpBackKillGiven(t *testing.T) {
+	for _, tc := range []struct {
+		label    string
+		path     string
+		cheaters map[uint64]string
+	}{
+		{"wingman", wingmanDemoPath, wingmanCheaters},
+		{"react", reactDemoPath, reactCheaters},
+		{"kgp", kgpDemoPath, kgpCheaters},
+	} {
+		abs, err := filepath.Abs(tc.path)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.path, err)
+		}
+		if _, err := os.Stat(abs); os.IsNotExist(err) {
+			t.Logf("skipping %s (demo missing)", tc.label)
+			continue
+		}
+		results, err := NewAnalyzer(abs).Analyze()
+		if err != nil {
+			t.Fatalf("%s analyze: %v", tc.label, err)
+		}
+
+		type row struct {
+			name      string
+			isCheat   bool
+			backGiven int64
+			backTotal int64
+			backPct   float64
+		}
+		rows := []row{}
+		for sid, ps := range results.DemoStats.Players {
+			if sid == 0 {
+				continue
+			}
+			r := row{name: ps.Player.Name}
+			if _, ok := tc.cheaters[sid]; ok {
+				r.isCheat = true
+			}
+			if m, ok := ps.GetMetric(stats.Category("behavioral"), stats.Key("back_kill_given_count")); ok {
+				r.backGiven = m.IntValue
+			}
+			if m, ok := ps.GetMetric(stats.Category("behavioral"), stats.Key("back_kill_given_total_kills")); ok {
+				r.backTotal = m.IntValue
+			}
+			if m, ok := ps.GetMetric(stats.Category("behavioral"), stats.Key("back_kill_given_pct")); ok {
+				r.backPct = m.FloatValue
+			}
+			rows = append(rows, r)
+		}
+		sort.Slice(rows, func(i, j int) bool { return rows[i].backPct > rows[j].backPct })
+
+		t.Logf("--- %s back-kill-given (kills where victim looking away) ---", tc.label)
+		t.Logf("  %-22s %-10s %-10s %-10s %s", "name", "back_given", "kills", "rate", "tag")
+		for _, r := range rows {
+			tag := ""
+			if r.isCheat {
+				tag = "[CHEATER]"
+			}
+			t.Logf("  %-22s %-10d %-10d %-10.2f%% %s",
+				r.name, r.backGiven, r.backTotal, r.backPct, tag)
+		}
 	}
 }
 
@@ -205,6 +280,7 @@ func TestDetector_DumpChannels(t *testing.T) {
 	}{
 		{"wingman", wingmanDemoPath, wingmanCheaters},
 		{"pros", ancientDemoPath, nil},
+		{"kgp", kgpDemoPath, kgpCheaters},
 	} {
 		abs, err := filepath.Abs(tc.path)
 		if err != nil {
@@ -408,6 +484,44 @@ func TestDetector_ReactAndyDemoCleanBelow(t *testing.T) {
 			t.Errorf("clean player %q (%s) falsely flagged in React Andy demo: %.2f%% >= %.2f%%",
 				name, s.name, s.likelihood, flagThreshold)
 		}
+	}
+}
+
+// TestDetector_KGPSzpontTopOfLobby asserts that in the KGP vs Crystal Club
+// tournament demo, szpont (the player tournament admins banned after the
+// match) scores strictly above every other player in the lobby. This is the
+// "wallhack-only in a 5v5 pro lobby" case: no aimbot tell, no triggerbot
+// tell, just positional information leakage detected via pre-FOV pre-aim.
+// Falling back below another player here means lobby-normalization or
+// channel weights drowned out the only wallhack-shaped signal in the lobby.
+//
+// Note: this demo's pre-FOV asymmetry test fails by design (every player
+// has many pre-FOV samples in a 24-round match), so szpont is NOT expected
+// to clear the 50% auto-flag bar — only to be the lobby's #1.
+func TestDetector_KGPSzpontTopOfLobby(t *testing.T) {
+	scores := runAnalyze(t, kgpDemoPath)
+	dumpRanked(t, "kgp (anubis)", scores, kgpCheaters)
+
+	minCheater, cheaterName, foundCheater := minScoreIn(scores, kgpCheaters)
+	if !foundCheater {
+		t.Fatal("szpont not found in scored players")
+	}
+
+	var maxClean float64
+	var maxCleanName string
+	for sid, s := range scores {
+		if _, isCheat := kgpCheaters[sid]; isCheat {
+			continue
+		}
+		if s.likelihood > maxClean {
+			maxClean = s.likelihood
+			maxCleanName = s.name
+		}
+	}
+
+	if minCheater <= maxClean {
+		t.Errorf("KGP ordering broken: szpont %q=%.2f%% must exceed top clean %q=%.2f%%",
+			cheaterName, minCheater, maxCleanName, maxClean)
 	}
 }
 

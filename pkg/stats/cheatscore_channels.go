@@ -27,11 +27,17 @@ const (
 )
 
 // evaluateHS scores headshot percentage. Ramp 55%→75%, n_full=20.
-// Bidirectional: a low HS% on many kills is real evidence of cleanness.
+// Positive-only: a high HS% on many kills is real cheat signal, but a low
+// HS% is not exculpatory — supports, awpers, and post-plant playstyles all
+// produce low HS rates without any cheat assistance, and wallhack-only
+// cheaters (info but no aim assistance) likewise have normal HS rates. The
+// old bidirectional mode was contributing strong negative log-odds for any
+// player below 55% HS, drowning out legitimate wallhack signals from
+// pre_fov/decoupling/back_killed.
 func evaluateHS(ps *PlayerStats) Channel {
 	totalKills, hasKills := psGetInt(ps, channelCategoryKills, Key("total_kills"))
 	if !hasKills || totalKills <= 0 {
-		return Channel{ID: "hs", Weight: 0.18, Mode: bidirectional}
+		return Channel{ID: "hs", Weight: 0.18, Mode: positiveOnly}
 	}
 	hsPct, _ := psGetFloat(ps, channelCategoryKills, Key("headshot_percentage"))
 	score := linearScore(hsPct, 55.0, 75.0)
@@ -43,17 +49,24 @@ func evaluateHS(ps *PlayerStats) Channel {
 		SampleN:    totalKills,
 		Weight:     0.18,
 		Zone:       zoneFor(score),
-		Mode:       bidirectional,
+		Mode:       positiveOnly,
 		HasData:    true,
 	}
 }
 
 // evaluateSnap scores P95 snap velocity. Ramp 2.0→3.5 °/ms, n_full=10.
 // Positive-only: a low P95 doesn't exonerate, only flags upward.
+//
+// Weight 0.10 (down from 0.12): in pro lobbies every aggressive rifler
+// crosses the 2°/ms threshold occasionally, producing raw=1.0 for ~70% of
+// the lobby and shrinking to the same adjusted score after lobby norm. The
+// channel becomes noise rather than signal there. Pre-FOV / decoupling /
+// back-killed carry the wallhack signature more reliably, so the weight
+// budget shifts toward those.
 func evaluateSnap(ps *PlayerStats) Channel {
 	snapCount, hasN := psGetInt(ps, channelCategoryAiming, Key("snap_count"))
 	if !hasN || snapCount <= 0 {
-		return Channel{ID: "snap", Weight: 0.12, Mode: positiveOnly}
+		return Channel{ID: "snap", Weight: 0.10, Mode: positiveOnly}
 	}
 	p95, _ := psGetFloat(ps, channelCategoryAiming, Key("p95_snap_velocity"))
 	score := linearScore(p95, 2.0, 3.5)
@@ -63,7 +76,7 @@ func evaluateSnap(ps *PlayerStats) Channel {
 		Confidence: linearConfidence(snapCount, 10),
 		Raw:        p95,
 		SampleN:    snapCount,
-		Weight:     0.12,
+		Weight:     0.10,
 		Zone:       zoneFor(score),
 		Mode:       positiveOnly,
 		HasData:    true,
@@ -151,10 +164,17 @@ func evaluateRecoil(ps *PlayerStats) Channel {
 // Calibration deviates from the user-supplied research table (7°→2.5°) because
 // observed wingman cheaters land at 6.17° and 7.25° — the 7° clean threshold
 // would zero them out. The 12°→4° ramp is anchored on the observed corpus.
+//
+// Weight 0.22 (up from 0.20): pre-FOV pre-aim is the most-cited wallhack
+// indicator in the literature and the only channel that reliably
+// distinguishes a wallhack-only cheater (info, no aim assistance) from a
+// legit player. Pro lobbies suppress most other channels via lobby
+// normalization, so concentrating weight here improves cheater/clean
+// separation without altering the underlying ramp.
 func evaluatePreFOV(ps *PlayerStats) Channel {
 	n, hasN := psGetInt(ps, channelCategoryBehavioral, Key("pre_fov_aim_samples"))
 	if !hasN || n <= 0 {
-		return Channel{ID: "pre_fov", Weight: 0.20, Mode: bidirectional}
+		return Channel{ID: "pre_fov", Weight: 0.22, Mode: bidirectional}
 	}
 	med, _ := psGetFloat(ps, channelCategoryBehavioral, Key("pre_fov_aim_median_deg"))
 	score := linearScore(med, 12.0, 4.0)
@@ -164,7 +184,7 @@ func evaluatePreFOV(ps *PlayerStats) Channel {
 		Confidence: sqrtConfidence(n, 15),
 		Raw:        med,
 		SampleN:    n,
-		Weight:     0.20,
+		Weight:     0.22,
 		Zone:       zoneFor(score),
 		Mode:       bidirectional,
 		HasData:    true,

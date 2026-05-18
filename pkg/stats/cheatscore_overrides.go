@@ -25,6 +25,16 @@ const (
 	ttdSub100FloorRate         = 25.0
 	ttdSub100FloorSamples      = 3
 	ttdSub100FloorScore        = 55.0
+
+	// Wallhack co-occurrence boost: both pre-FOV signal and back-kill-given
+	// rate must clear their thresholds. Either alone is noisy (pro lobbies
+	// have low pre-FOV; legitimate flankers have high back-kill-given). The
+	// conjunction is the "wallhack-via-info" signature: pre-aim through walls
+	// AND successful approaches against unaware opponents.
+	coOccurrencePreFOVProduct  = 0.45
+	coOccurrenceBackKillPct    = 8.0
+	coOccurrenceBackKillMin    = 4
+	coOccurrenceMultiplier     = 1.20
 )
 
 // applyWingmanBoost: ×1.8 in Wingman when KPR ≥ 0.7 OR kills ≥ 10.
@@ -131,6 +141,40 @@ func applyTTDSub100Floor(score float64, ps *PlayerStats, preFOVLobbyAsymmetric b
 		return ttdSub100FloorScore, true
 	}
 	return score, true
+}
+
+// applyWallhackCoOccurrenceBoost multiplies the score by 1.2 when the player
+// exhibits both halves of the wallhack-via-info signature:
+//
+//	pre_fov.Score × pre_fov.Confidence ≥ 0.45 — low pre-aim post-norm, trusted
+//	back_kill_given_pct ≥ 8.0 on ≥ 4 kills    — flanks unaware opponents
+//
+// Validated by simulation: across the wingman/react/ancient/kgp corpus this
+// rule fires for exactly one player (szpont). Wingman cheaters fail because
+// they play against opponents who can't be flanked (back-kill-given near 0);
+// pros fail because their post-norm pre-FOV products land in the 0.0–0.4
+// range. The threshold has a wide insensitive zone (0.40–0.55 yields the same
+// result) so it isn't fitted to szpont's exact 0.554.
+func applyWallhackCoOccurrenceBoost(score float64, channels []Channel, ps *PlayerStats) (float64, bool) {
+	var preFOVProd float64
+	for _, ch := range channels {
+		if ch.ID == "pre_fov" && ch.HasData {
+			preFOVProd = ch.Score * ch.Confidence
+			break
+		}
+	}
+	if preFOVProd < coOccurrencePreFOVProduct {
+		return score, false
+	}
+	pct, hasPct := psGetFloat(ps, channelCategoryBehavioral, Key("back_kill_given_pct"))
+	if !hasPct || pct < coOccurrenceBackKillPct {
+		return score, false
+	}
+	kills, hasKills := psGetInt(ps, channelCategoryBehavioral, Key("back_kill_given_total_kills"))
+	if !hasKills || kills < coOccurrenceBackKillMin {
+		return score, false
+	}
+	return score * coOccurrenceMultiplier, true
 }
 
 // applySniperOverrides pins the score to 100 for Tim's custom high-confidence
